@@ -1,5 +1,6 @@
 from utils import Bits
 from pytest import mark, fixture, raises
+from random import choice
 
 
 @mark.skip(reason='methods signature change')
@@ -131,9 +132,6 @@ class TestSet:
             Bits(42).set(bit)
 
 
-# check result type == Bits
-
-
 class TestSetClear:
 
     patterns = (
@@ -169,7 +167,7 @@ class TestSetClear:
         result = result.replace('1', '-').replace('0', '1').replace('-', '0')
         return ' '.join((operand, bits, result))
 
-    @fixture(params=patterns, ids=lambda par: '-'.join(par.split()))
+    @fixture(params=patterns, ids=lambda par: ' '.join(par.split()))
     def data_set_bits(self, request):
         operand, args, result = request.param.split()
         yield int(operand, 2), *tuple(int(n) for n in args), int(result, 2)
@@ -212,3 +210,99 @@ class TestSetClear:
         assert type(result) is Bits
 
 
+class TestMask:
+
+    patterns = (
+        '0000 ---- 0000',
+        '1111 -    1111',
+        '1110 ---1 1111',
+        '1111   -1 1111',
+        '1110    1 1111',
+        '0011 --00 0000',
+        '0000 --00 0000',
+        '1010 0--1 0011',
+        '0000 -1   0001',
+        '0000 1-   0010',
+        '0000 0000 0000',
+        '1111 0000 0000',
+        '0000 1111 1111',
+        '0000 -1-1 0101',
+        '1111 -0-1 1011',
+        '0001 1--- 1001',
+        '1001 1--- 1001',
+    )
+
+    random_marker_patterns = tuple(
+            pattern.replace('-', choice('!@#$%^&*()_+?|/~123abcXYZ.'))
+            for pattern in patterns if '-' in pattern
+    )
+    patterns_all = patterns + random_marker_patterns
+
+    @fixture(params=patterns_all, ids=lambda par: ' '.join(par.split()))
+    def data_mask(self, request):
+        operand, mask, result = request.param.split()
+        yield int(operand, 2), mask, int(result, 2)
+
+    def test_mask(self, data_mask):
+        operand, mask, expected = data_mask
+        result = Bits(operand).mask(mask)
+        assert result == expected
+        assert type(result) is Bits
+
+    @mark.parametrize('mask', (0, Bits, None, 1.0))
+    def test_mask_invalid(self, mask):
+        with raises(TypeError):
+            Bits(42).mask(mask)
+
+    def test_mask_empty(self):
+        result = Bits(42).mask('')
+        assert result == Bits(42)
+        assert type(result) is Bits
+
+
+class TestFlag:
+
+    patterns = (
+     '   0 0 0',
+     '   0 3 0',
+     '   1 0 1',
+     '   1 3 0',
+     '0110 1 1',
+     '0100 1 0',
+    )
+
+    @fixture(params=patterns, ids=lambda par: ' '.join(par.split()))
+    def data_flag(self, request):
+        operand, pos, result = request.param.strip().split()
+        yield int(operand, 2), int(pos), bool(int(result))
+
+    def test_flag(self, data_flag):
+        operand, pos, expected = data_flag
+        result = Bits(operand).flag(pos)
+        assert result == expected
+        assert type(result) is bool
+
+
+class TestFlags:
+
+    patterns = (
+        '0000 0 ()',
+        '0001 0 ()',
+        '0000 1 (0)',
+        '0001 1 (1)',
+        '1111 4 (1111)',
+        '0001 4 (1000)',
+        '0110 2 (01)',
+    )
+
+    @fixture(params=patterns, ids=lambda par: ' '.join(par.split()))
+    def data_flags(self, request):
+        operand, n, result = request.param.split()
+        yield int(operand, 2), int(n), tuple(bool(int(bit)) for bit in result[1:-1])
+
+    def test_flags(self, data_flags):
+        operand, n, expected = data_flags
+        result = Bits(operand).flags(n)
+        assert result == expected
+        assert type(result) is tuple
+        assert type(result[0]) is bool if len(result) != 0 else result == ()

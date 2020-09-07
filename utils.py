@@ -1,6 +1,7 @@
 from __future__ import annotations
 from functools import reduce
 from operator import or_, and_
+from typing import Tuple
 
 
 class Bits(int):
@@ -23,20 +24,42 @@ class Bits(int):
         else:
             return self
 
-    def mask(self, mask):
-        """set 0 and 1, leave - as is"""
+    def mask(self, mask: str) -> Bits:
+        """
+        Set 0 and 1, leave - as is
+        >>> Bits(0b0101).mask('-01-') == Bits(0b0011)
+        """
 
-    def flag(self, pos):
-        pass
+        result = self
+        for i, marker in enumerate(reversed(mask)):
+            if marker == '1':
+                result |= (1 << i)
+            elif marker == '0':
+                result &= ~(1 << i)
+        return Bits(result)
 
-    def flags(self, pos):
-        pass
+    def flag(self, pos: int) -> bool:
+        """
+        Extract one-bit boolean from specified position
+        """
+        return bool((self >> pos) & 0b1)
 
-    def combine(self, *parts):
-        pass
+    def flags(self, n) -> Tuple[bool, ...]:
+        """
+        Convert 'n' rightmost bits to tuple of booleans
+        Resulting order is right to left
+        """
 
-    def split(self, *margins):
+        return tuple(bool((self >> i) & 0b1) for i in range(n))
+
+    def place(self, what, pos):
         pass
 
     def extract(self, mask):
+        # Mask may look like '8----2--'
+        pass
+
+    @staticmethod
+    def compose():
+        # former bitsarray()
         pass
