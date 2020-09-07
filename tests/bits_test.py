@@ -2,6 +2,7 @@ from utils import Bits
 from pytest import mark, fixture, raises
 
 
+@mark.skip(reason='methods signature change')
 class TestSet:
 
     patterns_single_bit = (
@@ -128,3 +129,86 @@ class TestSet:
     def test_clear_invalid_bit(self, bit):
         with raises(TypeError):
             Bits(42).set(bit)
+
+
+# check result type == Bits
+
+
+class TestSetClear:
+
+    patterns = (
+        '1110 0   1111',
+        '1111 0   1111',
+        '1101 1   1111',
+        '1100 1   1110',
+        '0000 0   0001',
+        '0001 0   0001',
+        '0000 1   0010',
+        '0010 1   0010',
+        '1011 2   1111',
+        '0100 2   0100',
+        '0000 01  0011',
+        '0011 01  0011',
+        '0000 123 1110',
+        '0110 123 1110',
+        '0100 123 1110',
+        '0000 000 0001',
+        '0001 000 0001',
+        '0000 32  1100',
+        '1111 32  1111',
+        '0000 010 0011',
+        '0010 101 0011',
+        '0111 100 0111',
+        '0100 001 0111',
+    )
+
+    @staticmethod
+    def invert_bits(pattern):
+        operand, bits, result = pattern.split()
+        operand = operand.replace('1', '-').replace('0', '1').replace('-', '0')
+        result = result.replace('1', '-').replace('0', '1').replace('-', '0')
+        return ' '.join((operand, bits, result))
+
+    @fixture(params=patterns, ids=lambda par: '-'.join(par.split()))
+    def data_set_bits(self, request):
+        operand, args, result = request.param.split()
+        yield int(operand, 2), *tuple(int(n) for n in args), int(result, 2)
+
+    @fixture(params=map(invert_bits.__func__, patterns), ids=lambda par: '-'.join(par.split()))
+    def data_clear_bits(self, request):
+        operand, args, result = request.param.split()
+        yield int(operand, 2), *tuple(int(n) for n in args), int(result, 2)
+
+    def test_set_bits(self, data_set_bits):
+        operand, *bits, expected = data_set_bits
+        result = Bits(operand).set(*bits)
+        assert result == expected
+        assert type(result) is Bits
+
+    @mark.parametrize('bit', ('0', '123', None, 1.0))
+    def test_set_invalid_bit(self, bit):
+        with raises(TypeError):
+            Bits(42).set(bit)
+
+    def test_set_no_args(self):
+        result = Bits(42).set()
+        assert result == Bits(42)
+        assert type(result) is Bits
+
+    def test_clear_bits(self, data_clear_bits):
+        operand, *bits, expected = data_clear_bits
+        result = Bits(operand).clear(*bits)
+        assert result == expected
+        assert type(result) is Bits
+
+    @mark.parametrize('bit', ('0', '123', None, 1.0))
+    def test_set_invalid_bit(self, bit):
+        with raises(TypeError):
+            Bits(42).clear(bit)
+
+    def test_clear_no_args(self):
+        result = Bits(42).clear()
+        assert result == Bits(42)
+        assert type(result) is Bits
+
+
