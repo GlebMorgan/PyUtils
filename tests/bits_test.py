@@ -6,135 +6,6 @@ from pytest import mark, fixture, raises
 from random import choice, randint
 
 
-@mark.skip(reason='methods signature change')
-class TestSet:
-
-    patterns_single_bit = (
-        '1110 0 1111',
-        '1111 0 1111',
-        '1101 1 1111',
-        '1100 1 1110',
-        '0000 0 0001',
-        '0001 0 0001',
-        '0000 1 0010',
-        '0010 1 0010',
-        '1011 2 1111',
-        '0100 2 0100'
-    )
-
-    patterns_multiple_bit = (
-        '0000 01  0011',
-        '0011 01  0011',
-        '0000 123 1110',
-        '0110 123 1110',
-        '0100 123 1110',
-        '0000 000 0001',
-        '0001 000 0001',
-        '0000 32  1100',
-        '1111 32  1111',
-        '0000 010 0011',
-        '0010 101 0011',
-        '0111 100 0111',
-        '0100 001 0111',
-    )
-
-    patterns_all = patterns_single_bit + patterns_multiple_bit
-
-    @staticmethod
-    def pattern_invert_bits(pattern_list):
-        new_pattern_list = []
-        for pat in pattern_list:
-            operand, bits, result = pat.split()
-            operand = operand.replace('1', '-').replace('0', '1').replace('-', '0')
-            result = result.replace('1', '-').replace('0', '1').replace('-', '0')
-            new_pattern_list.append(' '.join((operand, bits, result)))
-        return new_pattern_list
-
-    @staticmethod
-    def ids_tuple(pattern):
-        num, bits, _ = pattern.split()
-        return f'''{num}-({bits})'''
-
-    @staticmethod
-    def ids_list(pattern):
-        num, bits, _ = pattern.split()
-        return f'''{num}-[{bits}]'''
-
-    @staticmethod
-    def ids_single(pattern):
-        return '-'.join(pattern.split()[:2])
-
-    @fixture(params=patterns_single_bit, ids=ids_single.__func__)
-    def data_set_single_bit(self, request):
-        operand, args, result = request.param.split()
-        yield int(operand, 2), int(args[0]), int(result, 2)
-
-    @fixture(params=patterns_all, ids=ids_tuple.__func__)
-    def data_set_tuple(self, request):
-        operand, args, result = request.param.split()
-        yield int(operand, 2), tuple(int(n) for n in args), int(result, 2)
-
-    @fixture(params=patterns_all, ids=ids_list.__func__)
-    def data_set_list(self, request):
-        operand, args, result = request.param.split()
-        yield int(operand, 2), list(int(n) for n in args), int(result, 2)
-
-    @fixture(params=pattern_invert_bits.__func__(patterns_single_bit), ids=ids_single.__func__)
-    def data_clear_single_bit(self, request):
-        operand, args, result = request.param.split()
-        yield int(operand, 2), int(args[0]), int(result, 2)
-
-    @fixture(params=pattern_invert_bits.__func__(patterns_all), ids=ids_tuple.__func__)
-    def data_clear_tuple(self, request):
-        operand, args, result = request.param.split()
-        yield int(operand, 2), tuple(int(n) for n in args), int(result, 2)
-
-    @fixture(params=pattern_invert_bits.__func__(patterns_all), ids=ids_list.__func__)
-    def data_clear_list(self, request):
-        operand, args, result = request.param.split()
-        yield int(operand, 2), list(int(n) for n in args), int(result, 2)
-
-    def test_set_single_bit(self, data_set_single_bit):
-        operand, bit, expected = data_set_single_bit
-        result = Bits(operand).set(bit)
-        assert result == expected
-
-    def test_set_tuple_bit(self, data_set_tuple):
-        operand, bit, expected = data_set_tuple
-        result = Bits(operand).set(bit)
-        assert result == expected
-
-    def test_set_list_bit(self, data_set_list):
-        operand, bit, expected = data_set_list
-        result = Bits(operand).set(bit)
-        assert result == expected
-
-    @mark.parametrize('bit', ('0', '123', None, 1.0))
-    def test_set_invalid_bit(self, bit):
-        with raises(TypeError):
-            Bits(42).set(bit)
-
-    def test_clear_single_bit(self, data_clear_single_bit):
-        operand, bit, expected = data_clear_single_bit
-        result = Bits(operand).clear(bit)
-        assert result == expected
-
-    def test_clear_tuple_bit(self, data_clear_tuple):
-        operand, bit, expected = data_clear_tuple
-        result = Bits(operand).clear(bit)
-        assert result == expected
-
-    def test_clear_list_bit(self, data_clear_list):
-        operand, bit, expected = data_clear_list
-        result = Bits(operand).clear(bit)
-        assert result == expected
-
-    @mark.parametrize('bit', ('0', '123', None, 1.0))
-    def test_clear_invalid_bit(self, bit):
-        with raises(TypeError):
-            Bits(42).set(bit)
-
-
 def check_result(method: str, operand, args, expected, *,
                  unpackargs: bool = False, subtype: type = False, kwargs: dict = None):
     if not kwargs:
@@ -183,15 +54,15 @@ class TestSetClear:
         result = result.replace('1', '-').replace('0', '1').replace('-', '0')
         return ' '.join((operand, bits, result))
 
-    @fixture(params=patterns, ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=patterns, ids=lambda par: ' '.join(par.split()))
     def data_set_bits(self, request):
         operand, args, result = request.param.strip().split()
-        yield int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
+        return int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
 
-    @fixture(params=map(invert_bits.__func__, patterns), ids=lambda par: '-'.join(par.split()))
+    @fixture(scope='class', params=map(invert_bits.__func__, patterns), ids=lambda par: '-'.join(par.split()))
     def data_clear_bits(self, request):
         operand, args, result = request.param.strip().split()
-        yield int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
+        return int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
 
     def test_set(self, data_set_bits):
         check_result('set', *data_set_bits, unpackargs=True)
@@ -244,17 +115,17 @@ class TestMask:
 
     delimiters = '!@#$%^&*()_+?|/~abcXYZ. '
 
-    @fixture(params=patterns)
+    @fixture(scope='class', params=patterns)
     def data_mask(self, request):
         operand, mask, result = request.param.strip().split()
-        yield int(operand, 2), mask, Bits(result, 2)
+        return int(operand, 2), mask, Bits(result, 2)
 
-    @fixture(params=patterns)
+    @fixture(scope='class', params=patterns)
     def data_mask_delim(self, request):
         operand, mask, result = request.param.strip().split()
         if '-' in mask:
             mask = mask.replace('-', choice(self.delimiters))
-        yield int(operand, 2), mask, Bits(result, 2)
+        return int(operand, 2), mask, Bits(result, 2)
 
     def test_mask(self, data_mask):
         check_result('mask', *data_mask)
@@ -284,10 +155,10 @@ class TestFlag:
      '0100 1 0',
     )
 
-    @fixture(params=patterns, ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=patterns, ids=lambda par: ' '.join(par.split()))
     def data_flag(self, request):
         operand, pos, result = request.param.strip().split()
-        yield int(operand, 2), int(pos), bool(int(result))
+        return int(operand, 2), int(pos), bool(int(result))
 
     def test_flag(self, data_flag):
         check_result('flag', *data_flag)
@@ -305,10 +176,10 @@ class TestFlags:
         '0110 2 (01)',
     )
 
-    @fixture(params=patterns, ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=patterns, ids=lambda par: ' '.join(par.split()))
     def data_flags(self, request):
         operand, n, result = request.param.strip().split()
-        yield int(operand, 2), int(n), tuple(bool(int(bit)) for bit in result[1:-1])
+        return int(operand, 2), int(n), tuple(bool(int(bit)) for bit in result[1:-1])
 
     def test_flags(self, data_flags):
         check_result('flags', *data_flags, subtype=bool)
@@ -336,7 +207,7 @@ class TestExtract:
     @fixture(params=patterns, ids=itemgetter(1))
     def data_extract(self, request, res_type):
         operand, mask, result = request.param[0].strip().split(maxsplit=2)
-        yield int(operand, 2), mask, res_type(int(num, 2) for num in result[1:-1].split())
+        return int(operand, 2), mask, res_type(int(num, 2) for num in result[1:-1].split())
 
     @fixture(params=patterns, ids=itemgetter(1))
     def data_extract_sep(self, request, method, res_type):
@@ -346,7 +217,7 @@ class TestExtract:
         markers = list(mask)
         for i in range(sep_count):
             markers.insert(randint(0, len(mask)), sep)
-        yield int(operand, 2), ''.join(markers), res_type(int(num, 2) for num in result[1:-1].split())
+        return int(operand, 2), ''.join(markers), res_type(int(num, 2) for num in result[1:-1].split())
 
     @mark.parametrize('method, res_type', [('extract', tuple), ('extract2', list)])
     def test_extract(self, data_extract, method, res_type):
@@ -382,12 +253,12 @@ class TestCompose:
 
     patterns = ('1101001', '1000000', '111', '000', '1', '0', '')
 
-    @fixture(params=patterns)
+    @fixture(scope='class', params=patterns)
     def data_compose(self, request):
         pattern = request.param
         flags = tuple(bool(int(bit)) for bit in pattern) if pattern else ()
         result = Bits(''.join(reversed(pattern)), 2) if pattern else Bits()
-        yield 0, flags, Bits(result)
+        return 0, flags, Bits(result)
 
     def test_compose(self, data_compose):
         check_result('compose', *data_compose, unpackargs=True)
@@ -423,12 +294,12 @@ class TestPack:
         ('10100001  -         1 1011 0   10100001', 'empty'),
     )
 
-    @fixture(params=patterns, ids=itemgetter(1))
+    @fixture(scope='class', params=patterns, ids=itemgetter(1))
     def data_pack(self, request):
         operand, mask, *args, result = request.param[0].strip().split()
-        yield int(operand, 2), (mask, *(int(num, 2) for num in args)), Bits(result, 2)
+        return int(operand, 2), (mask, *(int(num, 2) for num in args)), Bits(result, 2)
 
-    @fixture
+    @fixture(scope='class')
     def data_pack_sep(self, data_pack):
         operand, args, result = data_pack
         mask, *args = args
@@ -437,7 +308,7 @@ class TestPack:
         markers = list(mask)
         for i in range(sep_count):
             markers.insert(randint(0, len(mask)), sep)
-        yield operand, (''.join(markers), *args), result
+        return operand, (''.join(markers), *args), result
 
     def test_pack(self, data_pack):
         check_result('pack', *data_pack, unpackargs=True)
