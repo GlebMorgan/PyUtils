@@ -50,4 +50,21 @@ def test_fixture_parametrize(fixture_parametrize, arg):
     assert type(fixture_parametrize) is int
 
 
+# —————————————————————————————————————————————————— Request.module —————————————————————————————————————————————————— #
+
+@fixture(scope='module')
+def fixture_scope_module(request):
+    print(f'Request object: {request}')
+    print(f'Request attrs:')
+    print(*(f'    {attr} = {getattr(request, attr)}' for attr in request.__dict__), sep='\n')
+    print(f'Request.module: {request.module}')
+    print(f'Request.module attrs: {dir(request.module)}')
+    yield 1
+
+
+def test_fixture_scope_module(fixture_scope_module):
+    arg = fixture_scope_module
+    assert arg == 1
+
+
 # ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————— #
