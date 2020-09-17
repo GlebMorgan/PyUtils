@@ -11,6 +11,7 @@ class BenchmarkBitsExtract:
         self.test_set = self.generate_args(set_size)
 
     def generate_args(self, n):
+        print(f"Generating test data set: {n} items")
         result = []
         for i in range(n):
             operand = randrange(0, 2**16)
@@ -29,12 +30,16 @@ class BenchmarkBitsExtract:
 
     def run(self):
         print(f"Running benchmark for extract() and .extract2() with {len(self.test_set)} calls")
-        results = [
-            timeit(partial(self.run_benchmark, 'extract'), number=1),
-            timeit(partial(self.run_benchmark, 'extract2'), number=1),
-        ]
-        print(f"Bits.extract  = {results[0]}")
-        print(f"Bits.extract2 = {results[1]}")
+        extract = timeit(partial(self.run_benchmark, 'extract'), number=1)
+        extract2 = timeit(partial(self.run_benchmark, 'extract2'), number=1)
+
+        faster, slower = sorted((extract, extract2))
+        winner = 'extract' if faster == extract else 'extract2'
+        ratio = (slower - faster) / faster
+
+        print(f"Bits.extract  = {extract}")
+        print(f"Bits.extract2 = {extract2}")
+        print(f"Bits.{winner} is {ratio * 100:.4}% faster")
 
 
 if __name__ == '__main__':
