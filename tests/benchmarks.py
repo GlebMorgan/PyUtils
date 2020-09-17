@@ -1,59 +1,152 @@
+"""
+Cmd script for comparing performances of two functions/methods
+Script initializes specified `Benchmark` class with appropriate test data
+    and runs both functions with identical sets of arguments
+For list of options, run the script with -h option
+"""
+
+import sys
+from abc import abstractmethod
+from argparse import ArgumentParser
 from functools import partial
 from random import randint, randrange, sample
 from timeit import timeit
-import sys
-from utils import Bits
+from typing import Tuple, Callable, Sequence
 
 
-class BenchmarkBitsExtract:
+class Benchmark:
 
-    def __init__(self, set_size):
-        self.test_set = self.generate_args(set_size)
+    """
+    Base class for preparing and running benchmarks
+    Intended to be inherited and provided with appropriate test data sets
+    `.generate_args()` need to be overridden to provide a set of argument lists
+        for the pair of compared functions/methods (argument list may contain
+        just one single element if function accepts a single argument)
+    Lists of arguments are iterated over and acquired arguments are passed into target function
+    In order to run a benchmark, instantiate required `Benchmark` and call its `.run()` method
+    >>> benchmark = BenchmarkBytewise(10000, bytes_range=(200, 250), limit=10)
+    >>> benchmark.run(times=3)
+    """
 
-    def generate_args(self, n):
+    def __init__(self, dataset_size, functions, owner=None, **kwargs):
+        self.owner: type = owner
+        self.prefix = self.owner.__name__ + '.' if self.owner else ''
+        if len(functions) != 2:
+            raise ValueError("Can only compare 2 functions / methods")
+        self.functions: Tuple[Callable, Callable] = functions
+        self.names = tuple(f.__name__ for f in self.functions)
+        self.kwargs: dict = kwargs
+        print('Comparing functions {0}() and {1}() with kwargs ({2})'.format(
+                *self.names, ', '.join(f'{k}={v}' for k, v in self.kwargs.items())
+        ))
+        self.data: Sequence = self.generate_args(dataset_size)
+
+    @abstractmethod
+    def generate_args(self, size) -> tuple:
+        """
+        Generate test data set of a benchmark
+        Should return tuple of arguments / argument lists that would be passed to functions under benchmark
+        Intended to be overridden in child classes
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def show_args(self, n: int):
+        """
+        Show first `n` entries from test data set
+        """
+        raise NotImplementedError
+
+    def benchmark(self, func):
+        for args in self.data:
+            func(*args, **self.kwargs)
+
+    def run(self, times: int = 1):
+        print(f"Running benchmark for {self.names[0]}() and {self.names[1]}() with {len(self.data)} calls")
+        results = [timeit(partial(self.benchmark, f), number=times) for f in self.functions]
+
+        faster, slower = sorted(results)
+        winner = self.names[0] if faster == results[0] else self.names[1]
+
+        ratio = (slower - faster) / faster
+        difference = f'{ratio * 100:.4}%' if ratio < 1 else f'{ratio + 1:.3} times'
+
+        print(f"{self.prefix}{self.names[0]}  = {results[0]}")
+        print(f"{self.prefix}{self.names[1]} = {results[1]}")
+        print(f"{self.prefix}{winner} is {difference} faster")
+
+
+class BenchmarkBitsExtract(Benchmark):
+
+    __id__ = 'extract'
+
+    def __init__(self, dataset_size: int):
+        from utils import Bits
+        functions = Bits.extract, Bits.extract2
+        super().__init__(dataset_size, functions, owner=Bits)
+
+    def generate_args(self, n: int):
         print(f"Generating test data set: {n} items")
         result = []
         for i in range(n):
             operand = randrange(0, 2**16)
             arg = ''.join((str(item)*randint(1, 8) for item in sample((*range(9), '-'), k=4)))
-            result.append((operand, arg))
-        self.test_set = result
+            result.append((self.owner(operand), arg))
         return result
 
-    def show_args(self):
-        print(*(f'{bin(item[0]).ljust(18)} {item[1]}' for item in self.test_set), sep='\n')
+    def show_args(self, n: int):
+        print(*(f'{bin(item[0]).ljust(18)} {item[1]}' for item in self.data[:n]), sep='\n')
 
-    def run_benchmark(self, method):
-        method = getattr(Bits, method)
-        for operand, mask in self.test_set:
-            method(Bits(operand), mask)
 
-    def run(self):
-        print(f"Running benchmark for extract() and .extract2() with {len(self.test_set)} calls")
-        extract = timeit(partial(self.run_benchmark, 'extract'), number=1)
-        extract2 = timeit(partial(self.run_benchmark, 'extract2'), number=1)
+class BenchmarkBytewise(Benchmark):
 
-        faster, slower = sorted((extract, extract2))
-        winner = 'extract' if faster == extract else 'extract2'
-        ratio = (slower - faster) / faster
+    __id__ = 'bytewise'
 
-        print(f"Bits.extract  = {extract}")
-        print(f"Bits.extract2 = {extract2}")
-        print(f"Bits.{winner} is {ratio * 100:.4}% faster")
+    def __init__(self, dataset_size: int, bytes_range: Tuple[int, int] = None, **kwargs):
+        from utils import bytewise, bytewise2
+        functions = bytewise, bytewise2
+        self.range: Tuple[int, int] = bytes_range
+        super().__init__(dataset_size, functions, **kwargs)
+
+    def generate_args(self, n: int):
+        print(f"Generating test data set: {n} items")
+        gen_range = lambda: range(randint(*(self.range or (10, 255))))
+        return tuple((bytes(randint(0, 255) for _ in gen_range()),) for _ in range(n))
+
+    def show_args(self, n: int):
+        print(*(f'{item.hex()} (len={len(item)})' for item in self.data[:n]), sep='\n')
 
 
 if __name__ == '__main__':
 
-    benchmarks = {
-        'extract': BenchmarkBitsExtract(10000),
-    }
+    parser = ArgumentParser(description="Compare performance of two functions/methods")
+    parser.add_argument('-b', '--benchmark', dest='bench', metavar='ID',
+                        help="benchmark id to run (-l to list all available benchmarks)")
+    parser.add_argument('-s', '--dataset-size', dest='size', metavar='SIZE', type=int, default=1000,
+                        help="number of sets with different arguments for a benchmark run")
+    parser.add_argument('-o', '--option', nargs='+', dest='options', metavar='OPT=VALUE', default=[],
+                        help="additional options for Benchmark class or target function/method")
+    parser.add_argument('-r', '--runs', type=int, default=1,
+                        help="number of benchmark runs to average upon")
+    parser.add_argument('-l', '--list', action='store_true',
+                        help="list all available benchmark ids to use with -b")
+    cmd = parser.parse_args()
 
-    if len(sys.argv) == 1:
-        benchmark = benchmarks.popitem()[1]
+    is_benchmark = lambda obj: getattr(obj, '__bases__', (None,))[0] is Benchmark
+    benchmarks = {cls.__id__: cls for cls in locals().values() if is_benchmark(cls)}
+
+    if cmd.list:
+        print(*benchmarks.keys())
+        sys.exit()
+
+    if not cmd.bench:
+        benchmark = BenchmarkBytewise(10000, bytes_range=(200, 250), limit=10)
+        benchmark.run()
+
     else:
-        bench_id = sys.argv[1]
-        benchmark = benchmarks.get(bench_id, None)
+        options = {name: eval(value) for name, value in (spec.split('=') for spec in cmd.options)}
+        benchmark = benchmarks.get(cmd.bench, None)
         if benchmark is None:
-            print(f"Error: invalid benchmark id: {bench_id}")
+            raise ValueError(f"Invalid benchmark id: {cmd.bench} (use -l to list available ids)")
 
-    benchmark.run()
+        benchmark(cmd.size, **options).run(cmd.runs)
