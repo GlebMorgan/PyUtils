@@ -10,6 +10,9 @@ from typing import Tuple, List, Optional
 # TODO: short module description, purpose
 
 
+__all__ = ['Bits']
+
+
 class Bits(int):
     """
     Wrapper around `int` treating a number as a bit sequence
