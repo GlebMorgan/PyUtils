@@ -10,7 +10,7 @@ from typing import Tuple, List
 # TODO: short module description, purpose
 
 
-__all__ = ['sampledict', 'Bits', 'bytewise']
+__all__ = ['sampledict', 'Bits', 'bytewise', 'bitwise']
 
 
 sampledict = {
@@ -265,3 +265,11 @@ def bytewise2(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool 
         appendix = f' ({len(byteseq)} bytes)' if show_len else ''
         return sep.join((*head, '..', last)) + appendix
 
+
+def bitwise(byteseq: bytes, sep: str = ' ') -> str:
+    """
+    Return string representation of `byteseq` as binary octets separated by `sep`
+    >>> bitwise(b'abc') == '01100001 01100010 01100011'
+    >>> bitwise(bytes.fromhex('00 0A FF')) == '00000000 00001010 11111111'
+    """
+    return sep.join(f"{byte:08b}" for byte in byteseq)

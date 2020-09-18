@@ -1,6 +1,8 @@
 # PyUtils
 Python utilities for cross-project use
+
 TODO: how to run tests, benchmarks and other utilities
+
 
 ## Package contents
 
@@ -16,6 +18,7 @@ TODO: how to run tests, benchmarks and other utilities
   - **`.extract2()`** – a 25% slower implementation of `.extract()` with same functionality
   - **`.pack()`** – insert values specified in `nums` into current `Bits` object according to `mask`
 - **`bytewise`** – return string representation of `byteseq` as hexadecimal uppercase octets separated by `sep`
+- **`bitwise`** – return string representation of `byteseq` as binary octets separated by `sep`
 
 
 ## Documentation
@@ -218,4 +221,15 @@ If output is trimmed, `show_len` argument tells whether '(`<n>` bytes)' is appen
 >>> bytewise(b'12345', sep='-') == '31-32-33-34-35'
 >>> bytewise(bytes.fromhex('00 01 42 5A FF')) == '00 01 42 5A FF'
 >>> bytewise(b'python', limit=5) == '70 79 74 .. 6E (6 bytes)'
+```
+
+---
+
+#### `bitwise(byteseq: bytes, sep: str = ' ') -> str`
+
+##### Return string representation of `byteseq` as binary octets separated by `sep`
+
+```python
+>>> bitwise(b'abc') == '01100001 01100010 01100011'
+>>> bitwise(bytes.fromhex('00 0A FF')) == '00000000 00001010 11111111'
 ```
