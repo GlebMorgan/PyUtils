@@ -9,7 +9,7 @@ README = Path('./README.md')
 
 setup(
         name="utils",
-        version="1.1.dev3",
+        version="1.1.dev4",
         author="GlebMorgan",
         author_email="glebmorgan@gmail.com",
         description="Python utilities for cross-project use",

@@ -2,7 +2,7 @@ from random import choices
 
 from pytest import fixture, mark, raises
 
-from utils import bytewise
+from utils import bytewise, bitwise
 
 
 class TestBytewise:
@@ -54,7 +54,6 @@ class TestBytewise:
     def test_bytewise_sep(self, data_bytewise, sep):
         operand, expected = data_bytewise
         expected = expected.replace(' ', sep)
-        print(expected)
         assert bytewise(operand, sep=sep) == expected
 
     def test_bytewise_limit(self, data_bytewise_limit):
@@ -77,3 +76,31 @@ class TestBytewise:
         exception = ValueError if isinstance(limit, int) else TypeError
         with raises(exception):
             bytewise(b'python', limit=limit)
+
+
+class TestBitwise:
+    patterns = (
+        'general        00-42-FF-01-02-03-A0-0A',
+        'all hex nums   01-23-45-67-89-AB-CD-EF',
+        'single byte    CD',
+        'zeros          00-00-00-00-00-00-00-00',
+        'FFs            FF-FF-FF-FF-FF-FF-FF-FF',
+        'empty          -',
+    )
+
+    @fixture(scope='class', params=patterns, ids=TestBytewise.gen_ids)
+    def data_bitwise(self, request):
+        octets = request.param.split()[-1].split('-')
+        operand = bytes.fromhex(' '.join(octets))
+        result = ' '.join((bin(int(byte, base=16))[2:].rjust(8, '0') for byte in filter(None, octets)))
+        return operand, result
+
+    def test_bitwise(self, data_bitwise):
+        operand, expected = data_bitwise
+        assert bitwise(operand) == expected
+
+    @mark.parametrize('sep', (' ', '-', '_', ''), ids=repr)
+    def test_bitwise_sep(self, data_bitwise, sep):
+        operand, expected = data_bitwise
+        expected = expected.replace(' ', sep)
+        assert bitwise(operand, sep=sep) == expected
