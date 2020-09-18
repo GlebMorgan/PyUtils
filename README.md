@@ -1,9 +1,10 @@
 # PyUtils
 Python utilities for cross-project use
-
+TODO: how to run tests, benchmarks and other utilities
 
 ## Package contents
 
+- **`sampledict`** – dictionary for testing purposes
 - **`Bits`** – wrapper around `int` treating a number as a bit sequence
   - **`.set()`** – set bits on specified `positions` (set to `1`)
   - **`.clear()`** – clear bits on specified `positions` (set to `0`)
@@ -12,11 +13,19 @@ Python utilities for cross-project use
   - **`.flags()`** – convert `n` rightmost bits to tuple of booleans
   - **`.compose()`** – construct a `Bits` object out of given sequence of bits specified in `flags`
   - **`.extract()`** – pull out one or multiple values on sub-byte basis according to `mask`
-  - **`.extract2()`** – a 20% slower implementation of `.extract()` with same functionality
+  - **`.extract2()`** – a 25% slower implementation of `.extract()` with same functionality
   - **`.pack()`** – insert values specified in `nums` into current `Bits` object according to `mask`
+- **`bytewise`** – return string representation of `byteseq` as hexadecimal uppercase octets separated by `sep`
 
 
 ## Documentation
+
+#### `sampledict`
+
+##### Dictionary for testing purposes
+Contains objects of all common Python types + self-reference
+
+---
 
 ### `Bits`
 
@@ -152,7 +161,7 @@ Mask is right-aligned with processed number (to match least-significant bit)
 
 #### `Bits.extract2(self, mask: str, *, sep: str = ' ') -> List[int]`
 
-##### A 20% slower implementation of `.extract()` with same functionality
+##### A 25% slower implementation of `.extract()` with same functionality
 
 This variant also returns a `list` instead of a `tuple`
 
@@ -190,4 +199,23 @@ Mask is right-aligned with processed number (to match least-significant bit)
 >>> Bits().pack('0000--1-', 0b100, 1) == Bits(0b0100_0010)
 >>> Bits(0b10).pack('0011 22--', 0b11, 0, 1) == Bits(0b1100_0110)
 >>> Bits(0b1001_1010).pack('00- 111-', 0b11, 1) == Bits(0b1111_0010)
+```
+
+---
+
+#### `bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool = True) -> str`
+
+##### Return string representation of `byteseq` as hexadecimal uppercase octets separated by `sep`
+
+Functionally is the inverse of `bytes.fromhex()`
+
+In case the length of `byteseq` exceeds the value of specified `limit` argument, extra part of
+  output is collapsed to an ellipsis and only the last element is shown after it (see example)
+
+If output is trimmed, `show_len` argument tells whether '(`<n>` bytes)' is appended to output
+
+```python
+>>> bytewise(b'12345', sep='-') == '31-32-33-34-35'
+>>> bytewise(bytes.fromhex('00 01 42 5A FF')) == '00 01 42 5A FF'
+>>> bytewise(b'python', limit=5) == '70 79 74 .. 6E (6 bytes)'
 ```
