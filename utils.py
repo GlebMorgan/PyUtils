@@ -283,14 +283,17 @@ def deprecated(reason: str) -> FunctionWrapper:
     def deprecation_wrapper(wrapped, instance, args, kwargs):
         from warnings import warn
         name = wrapped.__class__.__name__.replace('type', 'class')
-        message = getattr(deprecation_wrapper, 'reason', '')
         warn(f"{name.capitalize()} {wrapped.__name__} is marked as deprecated ({message})",
              category=DeprecationWarning, stacklevel=3)
         return wrapped(*args, **kwargs)
 
-    if not isinstance(reason, str):
-        # Infer decorator is used without arguments and `reason` is actually a wrapped object
-        return deprecation_wrapper(reason)
-    else:
-        deprecation_wrapper.reason = reason
+    if isinstance(reason, str):
+        # Infer decorator is used with an argument,
+        #   thus store `reason` in a closure from `deprecation_wrapper`
+        message = reason
         return deprecation_wrapper
+    else:
+        # Infer decorator is used without arguments,
+        #   in this case `reason` is expected to be an object to be wrapped
+        message = ''
+        return deprecation_wrapper(reason)
