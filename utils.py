@@ -6,11 +6,13 @@ from itertools import groupby, islice, repeat
 from operator import or_, and_
 from typing import Tuple, List
 
+from wrapt import decorator, FunctionWrapper
+
 
 # TODO: short module description, purpose
 
 
-__all__ = ['sampledict', 'Bits', 'bytewise', 'bitwise']
+__all__ = ['sampledict', 'Bits', 'bytewise', 'bitwise', 'deprecated']
 
 
 sampledict = {
@@ -273,3 +275,22 @@ def bitwise(byteseq: bytes, sep: str = ' ') -> str:
     >>> bitwise(bytes.fromhex('00 0A FF')) == '00000000 00001010 11111111'
     """
     return sep.join(f"{byte:08b}" for byte in byteseq)
+
+
+def deprecated(reason: str) -> FunctionWrapper:
+
+    @decorator
+    def deprecation_wrapper(wrapped, instance, args, kwargs):
+        from warnings import warn
+        name = wrapped.__class__.__name__.replace('type', 'class')
+        message = getattr(deprecation_wrapper, 'reason', '')
+        warn(f"{name.capitalize()} {wrapped.__name__} is marked as deprecated ({message})",
+             category=DeprecationWarning, stacklevel=3)
+        return wrapped(*args, **kwargs)
+
+    if not isinstance(reason, str):
+        # Infer decorator is used without arguments and `reason` is actually a wrapped object
+        return deprecation_wrapper(reason)
+    else:
+        deprecation_wrapper.reason = reason
+        return deprecation_wrapper
