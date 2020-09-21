@@ -67,4 +67,26 @@ def test_fixture_scope_module(fixture_scope_module):
     assert arg == 1
 
 
+# ——————————————————— Multi-level fixture parametrization via combining inside aggregator fixture ———————————————————— #
+
+@fixture(params=(1, 2, 3))
+def fixture_nums(request):
+    return request.param
+
+
+@fixture(params=('a', 'b', 'c'))
+def fixture_chars(request):
+    return request.param
+
+
+@fixture(params=(True, False))
+def fixture_combine(request, fixture_nums, fixture_chars):
+    return str(fixture_nums) + fixture_chars + str(request.param)
+
+
+def test_dynamic_fixtures(fixture_combine):
+    print(fixture_combine)
+    assert 1
+
+
 # ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————— #

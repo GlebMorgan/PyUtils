@@ -132,8 +132,10 @@ if __name__ == '__main__':
                         help="list all available benchmark ids to use with -b")
     cmd = parser.parse_args()
 
-    is_benchmark = lambda obj: getattr(obj, '__bases__', (None,))[0] is Benchmark
-    benchmarks = {cls.__id__: cls for cls in locals().values() if is_benchmark(cls)}
+    benchmarks = {
+        'extract': BenchmarkBitsExtract,
+        'bytewise': BenchmarkBytewise,
+    }
 
     if cmd.list:
         print(*benchmarks.keys())

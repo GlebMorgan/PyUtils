@@ -59,7 +59,7 @@ class TestSetClear:
         operand, args, result = request.param.strip().split()
         return int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
 
-    @fixture(scope='class', params=map(invert_bits.__func__, patterns), ids=lambda par: '-'.join(par.split()))
+    @fixture(scope='class', params=map(invert_bits.__func__, patterns), ids=lambda par: ' '.join(par.split()))
     def data_clear_bits(self, request):
         operand, args, result = request.param.strip().split()
         return int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
