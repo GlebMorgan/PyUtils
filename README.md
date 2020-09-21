@@ -20,6 +20,7 @@ TODO: how to run tests, benchmarks and other utilities
 - **`bytewise`** – return string representation of `byteseq` as hexadecimal uppercase octets separated by `sep`
 - **`bitwise`** – return string representation of `byteseq` as binary octets separated by `sep`
 - **`deprecated`** – issue `DeprecationWarning` before invoking the wrapee function
+- **`autorepr`** – generate canonical `__repr__()` method using provided `msg`
 
 
 ## Documentation
@@ -251,4 +252,16 @@ If `reason` argument is specified, it will be displayed after the warning messag
 >>> def func(): ...
 >>> func()
 "DeprecationWarning: Function 'func' is marked as deprecated (duck tape)"
+```
+
+---
+
+#### `autorepr(msg: str) -> Callable`
+
+##### Generate canonical `__repr__()` method using provided `msg`
+
+```python
+>>> class Belarus:
+...     __repr__ = autorepr('deserves respect')
+<utils.autorepr.<locals>.Belarus deserves respect at 0x...>
 ```

@@ -4,7 +4,7 @@ import re
 from functools import reduce
 from itertools import groupby, islice, repeat
 from operator import or_, and_
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 
 from wrapt import decorator
 
@@ -12,7 +12,7 @@ from wrapt import decorator
 # TODO: short module description, purpose
 
 
-__all__ = ['sampledict', 'Bits', 'bytewise', 'bitwise', 'deprecated']
+__all__ = ['sampledict', 'Bits', 'bytewise', 'bitwise', 'deprecated', 'autorepr']
 
 
 sampledict = {
@@ -309,3 +309,17 @@ def deprecated(reason: str):
         #   in this case `reason` is expected to be an object to be wrapped
         details = ''
         return deprecation_wrapper(reason)
+
+
+def autorepr(msg: str) -> Callable:
+    """
+    Generate canonical `__repr__()` method using provided `msg`
+    >>> class Belarus:
+    ...     __repr__ = autorepr('deserves respect')
+        <utils.autorepr.<locals>.Belarus deserves respect at 0x...>
+    """
+
+    def __repr__(self):
+        cls = self.__class__
+        return f"<{cls.__module__}.{cls.__qualname__} {msg} at {hex(id(self))}>"
+    return __repr__
