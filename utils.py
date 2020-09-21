@@ -6,7 +6,7 @@ from itertools import groupby, islice, repeat
 from operator import or_, and_
 from typing import Tuple, List
 
-from wrapt import decorator, FunctionWrapper
+from wrapt import decorator
 
 
 # TODO: short module description, purpose
@@ -277,23 +277,35 @@ def bitwise(byteseq: bytes, sep: str = ' ') -> str:
     return sep.join(f"{byte:08b}" for byte in byteseq)
 
 
-def deprecated(reason: str) -> FunctionWrapper:
+def deprecated(reason: str):
+    """
+    Issue `DeprecationWarning` before invoking the wrapee function
+    Note: Warning filters should be enabled in order for the warning to be displayed.
+        Minimal required filter is 'default::DeprecationWarning:utils'
+    If `reason` argument is specified, it will be displayed after the warning message
+    >>> @deprecated('duck tape')
+    >>> def func(): ...
+    >>> func()
+        "DeprecationWarning: Function 'func' is marked as deprecated (duck tape)"
+    """
 
     @decorator
     def deprecation_wrapper(wrapped, instance, args, kwargs):
         from warnings import warn
-        name = wrapped.__class__.__name__.replace('type', 'class')
-        warn(f"{name.capitalize()} {wrapped.__name__} is marked as deprecated ({message})",
-             category=DeprecationWarning, stacklevel=3)
+        wrapee = wrapped.__class__.__name__.replace('type', 'class')
+        message = f"{wrapee.capitalize()} '{wrapped.__name__}' is marked as deprecated"
+        if details:
+            message += f' ({details})'
+        warn(message, category=DeprecationWarning, stacklevel=3)
         return wrapped(*args, **kwargs)
 
     if isinstance(reason, str):
         # Infer decorator is used with an argument,
         #   thus store `reason` in a closure from `deprecation_wrapper`
-        message = reason
+        details = reason
         return deprecation_wrapper
     else:
         # Infer decorator is used without arguments,
         #   in this case `reason` is expected to be an object to be wrapped
-        message = ''
+        details = ''
         return deprecation_wrapper(reason)

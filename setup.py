@@ -9,7 +9,7 @@ README = Path('./README.md')
 
 setup(
         name="utils",
-        version="1.1.dev4",
+        version="1.1.dev5",
         author="GlebMorgan",
         author_email="glebmorgan@gmail.com",
         description="Python utilities for cross-project use",
@@ -18,7 +18,7 @@ setup(
         url='https://github.com/GlebMorgan/PyUtils',
 
         python_requires='>=3.8.0',
-        # setup_requires
+        install_requires=['wrapt'],
         extras_require={'test': 'pytest'},
 
         # platforms

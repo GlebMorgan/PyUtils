@@ -19,6 +19,7 @@ TODO: how to run tests, benchmarks and other utilities
   - **`.pack()`** – insert values specified in `nums` into current `Bits` object according to `mask`
 - **`bytewise`** – return string representation of `byteseq` as hexadecimal uppercase octets separated by `sep`
 - **`bitwise`** – return string representation of `byteseq` as binary octets separated by `sep`
+- **`deprecated`** – issue `DeprecationWarning` before invoking the wrapee function
 
 
 ## Documentation
@@ -232,4 +233,22 @@ If output is trimmed, `show_len` argument tells whether '(`<n>` bytes)' is appen
 ```python
 >>> bitwise(b'abc') == '01100001 01100010 01100011'
 >>> bitwise(bytes.fromhex('00 0A FF')) == '00000000 00001010 11111111'
+```
+
+---
+
+#### `deprecated(reason: str)`
+
+##### Issue `DeprecationWarning` before invoking the wrapee function
+
+Note: Warning filters should be enabled in order for the warning to be displayed.
+  Minimal required filter is 'default::DeprecationWarning:utils'
+
+If `reason` argument is specified, it will be displayed after the warning message
+
+```python
+>>> @deprecated('duck tape')
+>>> def func(): ...
+>>> func()
+"DeprecationWarning: Function 'func' is marked as deprecated (duck tape)"
 ```
