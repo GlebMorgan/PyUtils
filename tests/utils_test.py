@@ -4,7 +4,7 @@ from random import choices
 
 from pytest import fixture, mark, raises, warns
 
-from utils import bytewise, bitwise, deprecated
+from utils import bytewise, bitwise, deprecated, autorepr
 
 
 class TestBytewise:
@@ -174,3 +174,22 @@ class TestDeprecated:
         equal = lambda attr: getattr(decorated, attr) == getattr(original, attr)
         assert all(equal for attr in attrs if hasattr(original, attr))
         assert signature(decorated) == signature(original)
+
+
+class TestAutorepr:
+
+    @fixture(scope='class')
+    def data_autorepr(self):
+        class A:
+            attr = 'value'
+            __repr__ = autorepr(f'class with attr={attr}')
+        instance = A()
+        qualname = '.'.join((self.__class__.__name__, 'data_autorepr', '<locals>', 'A'))
+        message = "class with attr=value"
+        return instance, qualname, message, id(instance)
+
+    def test_autorepr(self, data_autorepr):
+        instance, qualname, message, obj_id = data_autorepr
+        assert repr(instance) == f'<{__name__}.{qualname} {message} at {hex(obj_id)}>'
+        assert instance.__repr__.__name__ == '__repr__'
+        assert instance.__repr__.__self__ == instance
