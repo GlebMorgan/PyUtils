@@ -18,6 +18,10 @@ def path_modifier(path: Union[str, Path]):
         pass
 
 
+def iscode(line):
+    return line.startswith('>>>') or line.startswith('...')
+
+
 def cleanup_md(docs):
     lines = docs.split('\n')
     result = []
@@ -31,26 +35,26 @@ def cleanup_md(docs):
         if not result:
             line = '#'*5 + ' ' + line
 
-        # Replace dot markers with dashes
-        line = line.replace('•', '-')
-
-        # Convert indents to 2 spaces
-        line = line.replace(' '*4, ' '*2)
-
         # Insert codeblock start
-        if not codeblock and line.startswith('>>>'):
+        if not codeblock and iscode(line):
             result.append('')
             result.append('```python')
             codeblock = True
 
         # Insert codeblock end
-        elif codeblock and not line.startswith('>>>') and not line.startswith(' '):
+        elif codeblock and not iscode(line) and not line.startswith(' '):
             codeblock = False
             result.append('```')
 
         # Add line seps
         if result and not codeblock and not line.startswith(' '):
             result.append('')
+
+        # Replace dot markers with dashes
+        line = line.replace('•', '-')
+
+        # Convert indents to 2 spaces
+        line = line.strip() if codeblock else line.replace(' '*4, ' '*2)
 
         result.append(line)
 
