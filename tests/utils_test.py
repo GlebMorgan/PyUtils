@@ -1,8 +1,10 @@
+from inspect import signature
+from operator import itemgetter
 from random import choices
 
-from pytest import fixture, mark, raises
+from pytest import fixture, mark, raises, warns
 
-from utils import bytewise, bitwise
+from utils import bytewise, bitwise, deprecated
 
 
 class TestBytewise:
@@ -104,3 +106,71 @@ class TestBitwise:
         operand, expected = data_bitwise
         expected = expected.replace(' ', sep)
         assert bitwise(operand, sep=sep) == expected
+
+
+class TestDeprecated:
+
+    @staticmethod
+    def get_func():
+        """ Required to acquire pure function without bonding it to test class """
+        def func(a: float, /, b: str, c: int = 0, *, d: bool, f=None):
+            return f'{a=}, {b=}, {c=}, {d=}, {f=}'
+        return func
+
+    class Class:
+        def __init__(self, *args, **kwargs):
+            self.attr = ...
+
+        def __eq__(self, other):
+            return self.attr == other.attr
+
+        def instancemethod(self, a: float, /, b: str, c: int = 0, *, d: bool, f=None):
+            return f'{self=}, {a=}, {b=}, {c=}, {d=}, {f=}'
+
+        @staticmethod
+        def staticmethod(a: float, /, b: str, c: int = 0, *, d: bool, f=None):
+            return f'{a=}, {b=}, {c=}, {d=}, {f=}'
+
+        @classmethod
+        def classmethod(cls, a: float, /, b: str, c: int = 0, *, d: bool, f=None):
+            return f'{cls=}, {a=}, {b=}, {c=}, {d=}, {f=}'
+
+        def __call__(self, a: float, /, b: str, c: int = 0, *, d: bool, f=None):
+            return f'{self=}, {a=}, {b=}, {c=}, {d=}, {f=}'
+
+    callables = (
+        (get_func.__func__(), 'func'),
+        (Class, 'class'),
+        (Class.classmethod, 'classmethod'),
+        (Class.staticmethod, 'staticmethod'),
+        (Class().instancemethod, '.instancemethod'),
+        (Class().classmethod, '.classmethod'),
+        (Class().staticmethod, '.staticmethod'),
+        (Class().__call__, 'class()'),
+    )
+
+    @fixture(scope='class', params=(None, '', 'reason'), ids='reason={}'.format)
+    def data_reason(self, request):
+        return request.param
+
+    @fixture(scope='class', params=callables, ids=itemgetter(1))
+    def data_deprecated(self, data_reason, request):
+        args = (3.2, 'result=')
+        kwargs = dict(d=True, f=Ellipsis)
+        wrapee = request.param[0]
+        if data_reason is None:
+            wrapper = deprecated(wrapee)
+        else:
+            wrapper = deprecated(data_reason)(wrapee)
+        return args, kwargs, data_reason, wrapee, wrapper
+
+    def test_deprecated(self, data_deprecated):
+        args, kwargs, reason, original, decorated = data_deprecated
+        assert decorated.__wrapped__ == original
+        message_pattern = rf'.*\({reason}\)' if reason else ''
+        with warns(DeprecationWarning, match=message_pattern):
+            assert decorated(*args, **kwargs) == original(*args, **kwargs)
+        attrs = ('__name__', '__doc__', '__func__')
+        equal = lambda attr: getattr(decorated, attr) == getattr(original, attr)
+        assert all(equal for attr in attrs if hasattr(original, attr))
+        assert signature(decorated) == signature(original)
