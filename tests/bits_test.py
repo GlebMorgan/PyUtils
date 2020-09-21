@@ -240,7 +240,7 @@ class TestExtract:
         assert extract('---') == res_type()
         assert extract('@') == res_type()
 
-    @mark.parametrize('sep', ('', ' ', '@', 'sep', False), ids=lambda par: f'sep={par}')
+    @mark.parametrize('sep', ('', ' ', '@', 'sep', False), ids='sep={}'.format)
     @mark.parametrize('method, res_type', [('extract', tuple), ('extract2', list)])
     def test_extract_custom_sep(self, method: str, res_type: type, sep: str):
         value = 0b00110101
@@ -328,7 +328,7 @@ class TestPack:
         assert Bits(42).pack('---') == Bits(42)
         assert Bits(42).pack('rubbish') == Bits(42)
 
-    @mark.parametrize('sep', ('', ' ', '@', 'sep', False), ids=lambda par: f'sep={par}')
+    @mark.parametrize('sep', ('', ' ', '@', 'sep', False), ids='sep={}'.format)
     def test_pack_custom_sep(self, sep):
         value = 0b10
         mask = '{sep}0011{sep}22--'.format(sep=sep if sep else '')
