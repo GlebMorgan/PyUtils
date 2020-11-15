@@ -1,4 +1,4 @@
-from pytest import fixture, mark
+from pytest import fixture, mark, lazy_fixture
 
 
 # ————————————————————————————————— Fixture parametrization via @fixture(params=...) ————————————————————————————————— #
@@ -84,9 +84,62 @@ def fixture_combine(request, fixture_nums, fixture_chars):
     return str(fixture_nums) + fixture_chars + str(request.param)
 
 
-def test_dynamic_fixtures(fixture_combine):
+def test_combined_fixture(fixture_combine):
     print(fixture_combine)
-    assert 1
 
 
-# ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————— #
+# ————————————————————————————————————————————— Lazy fixtures (plugin) ——————————————————————————————————————————————— #
+
+def func1():
+    return 42
+
+
+def func2():
+    return 's'
+
+
+for f in [func1, func2]:
+    name = 'fixture'+f.__name__[-1]
+    globals()[name] = fixture(scope='function', name=name)(f)
+
+
+@mark.parametrize('fix', (lazy_fixture('fixture1'), lazy_fixture('fixture2')))
+def test_dynamic_fixture(fix):
+    print(fix)
+
+
+# ————————————————————————————————————————————— Dict fixture params (fail) ——————————————————————————————————————————— #
+
+d = dict(a=3, b=5, c=0)
+
+
+@fixture(params=d.values(), ids=d.keys())
+def fixture_dict_params(request):
+    return request.param
+
+
+def test_fixture_dict_params(fixture_dict_params):
+    print(fixture_dict_params)
+
+
+# ——————————————————————————————————————————— @fixture(ids=...) techniques ——————————————————————————————————————————— #
+
+@fixture(params=((1, 'a'), (2, 'b'), (3, 'c')), ids='{[1]}-test'.format)
+def fixture_ids_using_format(request):
+    return request.param
+
+
+def test_fixture_ids_using_format(fixture_ids_using_format):
+    print(fixture_ids_using_format)
+
+
+# ———————————————————————————————————————— Implicit indirect parametrization ————————————————————————————————————————— #
+
+@fixture(params=[1, 2, 3], ids='param={}'.format)
+def fixture_indirect_parameter(request, par):
+    return request.param, par
+
+
+@mark.parametrize('par', ['ok'])
+def test_fixture_indirect_parameter(fixture_indirect_parameter, par):
+    print(fixture_indirect_parameter, par)

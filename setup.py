@@ -20,7 +20,7 @@ setup(
         packages=['utils'],
         python_requires='>=3.8.0',
         install_requires=['wrapt'],
-        extras_require={'test': 'pytest'},
+        extras_require={'test': ['pytest', 'pytest-lazy-fixture']},
 
         # platforms
         # classifiers
