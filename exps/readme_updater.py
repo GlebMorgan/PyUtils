@@ -33,7 +33,7 @@ def cleanup_md(docs):
 
         # Convert the first line to title
         if not result:
-            line = '#'*5 + ' ' + line
+            line = '####' + ' ' + line
 
         # Insert codeblock start
         if not codeblock and iscode(line):

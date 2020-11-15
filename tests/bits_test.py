@@ -1,7 +1,7 @@
 from inspect import signature
 from operator import itemgetter
 
-from utils import Bits
+from utils.bits import Bits
 from pytest import mark, fixture, raises
 from random import choice, randint
 

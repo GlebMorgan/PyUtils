@@ -79,6 +79,8 @@ class TestBytewise:
         with raises(exception):
             bytewise(b'python', limit=limit)
 
+    # TODO: add tests for bytearray
+
 
 class TestBitwise:
     patterns = (
