@@ -1,0 +1,326 @@
+# TYPING ENTRIES
+
+  - Use `typing.get_type_hints()` compulsorily!
+  - Check signature to determine type of contents for container types (`Collection`, `List`, etc.).
+    - True (default) – inspect the signature of corresponding container method(s)
+    - False – contents are not introspected (contents are not part of what we can call a 'type')
+  Settings:
+    1. Container types action mapping
+    3. Error Policy (this is annotation-related errors, not typecheck failures):
+      - error (default) – raise Error
+      - warn  – emit Warning and ignore annotation
+      - skip  – just ignore (as if it were Any)
+    4. Report policy:
+      - return – None if typecheck succeeds, error message otherwise
+      - raise – raise TypeError with corresponding error message
+  - add self-reference check (to avoid infinite recursion)
+
+
+
+## Glossary:
+
+  - <pass>      typecheck is passed straight off
+  - <todo>      mark as todo in implementation
+  - <type>      treat as type
+  - <special>   special unique treatment
+  - <error>     invalid annotation – consult Error Policy
+
+
+
+## Types:
+
+`TypeName`              Type(TypeName)  Action for `TypeName`               Action for `TypeName[...]`
+——————————————————————— ——————————————— ——————————————————————————————————— —————————————————————————————————————————————
+(SpecialForms)
+`Any`                   `SpecialForm`   <pass>                              —
+`ClassVar`              `SpecialForm`   <pass>                              inspect contents (`__args__[0]`)
+`Final`                 `SpecialForm`   <pass>                              inspect contents (`__args__[0]`)
+`ForwardRef`            `type`          <error>  # types should be resolved —
+`Literal`               `SpecialForm`   <error>                             unwrap and inspect contents (`__args__`)
+`Optional`              `SpecialForm`   <error>                             unwrap and inspect contents (`__args__[0]`)
+`Union`                 `SpecialForm`   <error>                             check value to be one of `__args__`
+`TypeVar('<Name>')`     `TypeVar`       <special> (<todo> handle variance)  —
+
+(TypeDeclarations)
+`Generic`               `type`          <type>                              
+`TypedDict`             `TypedDictMeta` <special>                           —
+`TypeVar`               `type`          <type>                              —
+`NamedTuple`            `NamedTupleMeta`<error>  # check specific type or just tuple
+`Protocol`              `ProtocolMeta`  <type> if @runtime_checkable        NotImplemented <special> <todo>
+
+(Interfaces)
+`Awaitable`             `GenericAlias`  <type>
+`Callable`              `GenericAlias`  <type>                              + signature, if present (configurable[on])
+`ContextManager`        `GenericAlias`  <type>                              + check `__enter__()` return type signature, if exists (configurable[on])
+`AsyncContextManager`   `GenericAlias`  <type>                              + check `__aenter__()` return type signature, if any (configurable[on])
+`Coroutine`             `GenericAlias`  <type>                              + signature, if present (configurable[on])
+`Generator`             `GenericAlias`  <type>                              + signature, if present (configurable[on])
+`AsyncGenerator`        `GenericAlias`  <type>                              + signature, if present (configurable[on])
+`Hashable`              `GenericAlias`  <type>                              —
+`Iterable`              `GenericAlias`  <type>
+`AsyncIterable`         `GenericAlias`  <type>
+`Iterator`              `GenericAlias`  <type>                              + check function signature, if available (configurable[on])
+`AsyncIterator`         `GenericAlias`  <type>                              + check function signature, if available (configurable[on]) 
+`Reversible`            `GenericAlias`  <type>
+`Sized`                 `GenericAlias`  <type>                              —
+`SupportsAbs`           `ProtocolMeta`  <type>                              —
+`SupportsBytes`         `ProtocolMeta`  <type>                              —
+`SupportsComplex`       `ProtocolMeta`  <type>                              —
+`SupportsFloat`         `ProtocolMeta`  <type>                              —
+`SupportsIndex`         `ProtocolMeta`  <type>                              —
+`SupportsInt`           `ProtocolMeta`  <type>                              —
+`SupportsRound`         `ProtocolMeta`  <type>                              —
+
+(Container types)
+`ChainMap`              `GenericAlias`  <type>                              + check value to contain items of valid type from `__args__[0]` and `[1]`
+`Collection`            `GenericAlias`  <type>                              + check element types if `__getitem__()` is defined (configurable[off])
+`Container`             `GenericAlias`  <type>                                      
+`Counter`               `GenericAlias`  <type>                              + check value `.keys()` to contain valid type from `__args__`
+`Deque`                 `GenericAlias`  <type>
+`Dict`                  `GenericAlias`  <type>                              + check value`.items()` contain valid types from `__args__[0]` and `[1]`
+`DefaultDict`           `GenericAlias`  <type>                              + check value`.items()` contain valid types from `__args__[0]` and `[1]`
+`OrderedDict`           `GenericAlias`  <type>                              + check value`.items()` contain valid types from `__args__[0]` and `[1]`
+`ItemsView`             `GenericAlias`  <type>                              + check value to contain valid types from `__args__[0]` and `[1]`
+`KeysView`              `GenericAlias`  <type>                              + check value to contain valid types from `__args__[0]`
+`ValuesView`            `GenericAlias`  <type>                              + check value to contain valid types from `__args__[0]`
+`List`                  `GenericAlias`  <type>                              + check value to contain valid type (configurable[off])
+`Mapping`               `GenericAlias`  <type>                              + check value to contain items of valid type from `__args__[0]` and `[1]`
+`MutableMapping`        `GenericAlias`  <type>                              + check value to contain items of valid type from `__args__[0]` and `[1]`
+`MappingView`           `GenericAlias`  <type>
+`Sequence`              `GenericAlias`  <type>                              + check contents type with value's `__getitem__` to match `__args__`
+`MutableSequence`       `GenericAlias`  <type>                              + check contents type with value's `__getitem__` to match `__args__`
+`Set`                   `GenericAlias`  <type>                              + check contents by iterating over to match `__args__`
+`FrozenSet`             `GenericAlias`  <type>                              + check contents by iterating over to match `__args__`
+`AbstractSet`           `GenericAlias`  <type>                              + check contents by iterating over to match `__args__`
+`MutableSet`            `GenericAlias`  <type>                              + check contents by iterating over to match `__args__`
+`Tuple`                 `GenericAlias`  <type>                              + `__args__` conform,
+                                                                            consider `Ellipsis` and `Tuple[()]` (configurable[on]),
+                                                                            treat homogenious tuples (`Tuple[<type>, ...]`) as `List`s
+(Data types)
+`ByteString`            `GenericAlias`  <type>                              —
+`Type`                  `GenericAlias`  <type>                              + `__args__[0]` conforms if `__args__` != `(+CT_co,)`
+`Pattern`               `GenericAlias`  <type>                              check value`.pattern` to match `__args__[0]`
+`Match`                 `GenericAlias`  <type>                              check value`.string` to match `__args__[0]`
+`IO`                    `type`          check type `IOBase`  <todo>
+`TextIO`                `type`          check type `TextIOBase` <todo>      —
+`BinaryIO`              `type`          check type `BufferedIOBase` <todo>  —
+
+
+
+## Properties
+
+See `/notebooks/TypingEntries.ipynb`
+
+                          TypeName Category   args o a o[] a[] g s s[] tch t[] t.o Generic type         Specific type Origin type 
+    —————————————————————————————— —————————— ———— — — ——— ——— — — ——— ——— ——— ——— ———————————————————— ————————————— ————————————
+                      class 'type' BareType   ···· - -  -   -  - ·  ·   t   ·   ·  type                                           
+         class 'typing.ForwardRef' ForwardRef ···· - -  -   -  - ·  ·   t   ·   ·  type                                           
+                                ~T TypeVar    ···· - -  -   -  - ·  ·   -   ·   ·  TypeVar                                        
+                               ~TB TypeVar    ···· - -  -   -  - ·  ·   -   ·   ·  TypeVar                                        
+                               ~TC TypeVar    ···· - -  -   -  - ·  ·   -   ·   ·  TypeVar                                        
+                               Any Special    ···· - -  -   -  - ·  ·   -   ·   ·  SpecialForm                                    
+                          ClassVar Special    1··· - -  o   a  - ·  -   -   -   -  SpecialForm          GenericAlias  SpecialForm 
+                             Final Special    1··· - -  o   a  - ·  -   -   -   -  SpecialForm          GenericAlias  SpecialForm 
+                           Literal Special    123n - -  o   a  - ·  -   -   -   -  SpecialForm          GenericAlias  SpecialForm 
+                          Optional Special    1··· - -  o   a  - ·  -   -   -   -  SpecialForm          GenericAlias  SpecialForm 
+                             Union Special    123n - -  o   a  - ·  -   -   -   -  SpecialForm          GenericAlias  SpecialForm 
+                         Awaitable Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                          Callable Interface  ···· o a  -   -  - s  ·   t   ·   ·  VariadicGenericAlias               ABCMeta     
+                    ContextManager Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+               AsyncContextManager Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                         Coroutine Interface  ··3· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                         Generator Interface  ··3· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                    AsyncGenerator Interface  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                          Hashable Interface  ···· o a  -   -  - s  ·   t   ·   ·  GenericAlias                       ABCMeta     
+                          Iterable Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                     AsyncIterable Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                          Iterator Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                     AsyncIterator Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                        Reversible Interface  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                             Sized Interface  ···· o a  -   -  - s  ·   t   ·   ·  GenericAlias                       ABCMeta     
+        class 'typing.SupportsAbs' Protocol   1··· - -  o   a  g ·  -   t   -   o  ProtocolMeta         GenericAlias  ProtocolMeta
+      class 'typing.SupportsRound' Protocol   1··· - -  o   a  g ·  -   t   -   o  ProtocolMeta         GenericAlias  ProtocolMeta
+      class 'typing.SupportsBytes' Protocol   ···· - -  -   -  g ·  ·   t   ·   ·  ProtocolMeta                                   
+    class 'typing.SupportsComplex' Protocol   ···· - -  -   -  g ·  ·   t   ·   ·  ProtocolMeta                                   
+      class 'typing.SupportsFloat' Protocol   ···· - -  -   -  g ·  ·   t   ·   ·  ProtocolMeta                                   
+      class 'typing.SupportsIndex' Protocol   ···· - -  -   -  g ·  ·   t   ·   ·  ProtocolMeta                                   
+        class 'typing.SupportsInt' Protocol   ···· - -  -   -  g ·  ·   t   ·   ·  ProtocolMeta                                   
+                          ChainMap Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                        Collection Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                         Container Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                           Counter Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                             Deque Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                              Dict Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                       DefaultDict Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                       OrderedDict Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                         ItemsView Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                          KeysView Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                        ValuesView Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                              List Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                           Mapping Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                    MutableMapping Container  ·2·· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                       MappingView Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                          Sequence Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                   MutableSequence Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                               Set Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                         FrozenSet Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                       AbstractSet Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                        MutableSet Container  1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  ABCMeta     
+                             Tuple Container  123n o a  o   a  - s  -   t   -   o  VariadicGenericAlias GenericAlias  type        
+            class 'typing.Generic' TypeDec    ···· - -  -   -  g ·  ·   t   ·   ·  type                                           
+          class 'typing.TypedDict' TypeDec    ···· - -  -   -  - ·  ·   -   ·   ·  TypedDictMeta                                  
+            class 'typing.TypeVar' TypeDec    ···· - -  -   -  - ·  ·   t   ·   ·  type                                           
+         class 'typing.NamedTuple' TypeDec    ···· - -  -   -  - ·  ·   t   ·   ·  NamedTupleMeta                                 
+           class 'typing.Protocol' TypeDec    ···· - -  -   -  g ·  ·   t   ·   ·  ProtocolMeta                                   
+                        ByteString Data       ···· o a  -   -  - s  ·   t   ·   ·  GenericAlias                       ABCMeta     
+                              Type Data       1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                           Pattern Data       1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                             Match Data       1··· o a  o   a  - s  -   t   -   o  GenericAlias         GenericAlias  type        
+                 class 'typing.IO' RefType    1··· - -  o   a  g ·  -   t   -   o  type                 GenericAlias  type        
+             class 'typing.TextIO' RefType    ···· - -  -   -  g ·  ·   t   ·   ·  type                                           
+           class 'typing.BinaryIO' RefType    ···· - -  -   -  g ·  ·   t   ·   ·  type                                           
+
+
+
+## Valid types
+
+Check with `isinstance(typespec, type)` since metaclasses are not in the list
+  - type
+  - TypeVar
+  - SpecialForm
+  - GenericAlias
+
+
+
+## Actions
+
+### Actions Glossary:
+  ⤴ – return success or failure
+  ↺ – recurse with different typespec / value
+  ✓ – perform typecheck
+  ?[] – decide based on configuration
+
+`NoneType`              ✓ `value` is `None`
+
+`ForwardRef`            <type>
+`ForwardRef()`          <error>
+
+`Any`                   ⤴ `True`
+
+`ClassVar`, `Final`     ↺ with `__args__[0]`
+
+`Literal`               ✓ `value` in `__args__` and ⤴
+
+`Optional`              if `value` is `None`: ⤴, else: ↺ with `__args__[0]`
+
+`Union`                 ⤴ `any()` of (↺ with `__args__`)
+
+`NoReturn`              <error>
+
+`Awaitable`             ✓ `value` is awaitable
+                        ?[introspect.signatures] ✓ `get_type_hints(value)['return'] == __args__[0]`
+
+`Callable`              ✓ `value` is callable
+                        ?[introspect.callable]
+                          `parameters = {par: get_type_hints(callback)[par] for par in [*signature(callback).parameters, 'return']}`
+                          # ▲ required to maintain order for positional-only arguments
+                          ✓ return type: `parameters['return']` matches `__args__[-1]`
+                          ✓ signature:
+                            • `parameters[:n-1]` matches `__args__[:-1]` (passes if `__args__[0] == Ellipsis`)
+                            • no one of `signature(callback).parameters[:n-1]` is keyword-only
+                            • `signature(callback).parameters[n-1:]` all have default values
+
+`ContextManager`        ✓ `value` is a context manager
+                        ?[introspect.signatures] ✓ `get_type_hints(value.__enter__)['return']` matches `__args__[0]`
+
+`AsyncContextManager`   ✓ `value` is an async context manager
+                        ?[introspect.signatures] ✓ `get_type_hints(value.__aenter__)['return']` matches `__args__[0]`
+
+`Coroutine`             ✓ `value` is a coroutine
+                        # no way to check signature
+
+`Generator`             ✓ `value` is a generator
+                        # no way to check signature
+
+`AsyncGenerator`        ✓ `value` is an async generator
+                        # no way to check signature
+
+`Hashable`              ✓ `value` is hashable
+
+`Iterable`              ✓ `value` is iterable
+                        ?[introspect.signatures] ✓ `get_type_hints(value.__iter__)['return']` matches `__args__[0]`
+
+`AsyncIterable`         ✓ `value` is async iterable
+                        ?[introspect.signatures] ✓ `get_type_hints(value.__aiter__)['return']` matches `__args__[0]`
+
+`Iterator`              ✓ `value` is iterator
+                        ?[introspect.signatures] ✓ `get_type_hints(value)['return']` matches `__args__[0]`
+
+`AsyncIterator`         ✓ `value` is async iterator
+                        ?[introspect.signatures] ✓ `get_type_hints(value)['return']` matches `__args__[0]`
+
+`Reversible`            ✓ `value` is reversible
+                        ?[introspect.signatures] ✓ `get_type_hints(value.__reversed__)['return']` matches `__args__[0]`
+
+`Sized`                 ✓ `value` is sized
+
+`SupportsAbs`           ✓ `value` is instance of `Supports...`
+`SupportsRound`         ?[introspect.signatures] ✓ `get_type_hints(value).__<method>__['return']` matches `__args__[0]`
+
+
+
+`Supports...`           ✓ `value` is instance of `Supports...`
+
+
+
+`<Container>`           ✓ `value` is correct type
+                        ?[introspect.signature] ✓ <lookup corresponding method>
+
+
+
+`Tuple`                 ✓ `value` is tuple
+                        ?[introspect.tuple]
+                          if `__args__[1]` is `Ellipsis`: ⤴
+                          else: ✓ isinstance(`item`, `typevar`) for `item`, `typevar` in `zip(value, __args__)`
+
+`Protocol`              <type> (useless)
+`Protocol()`            ✓ `value` is instance of `Protocol`
+
+`Generic`               ✓ `value` is instance of `Generic`
+`Generic()`             <type>
+
+`TypedDict`             <error> (raises by itself)
+`TypedDict()`           ✓ `value` is instance of `dict`
+                        ?[introspect.typed_dict]
+                          `annotations = get_type_hints(typespec)`
+                          if `typespec.__total__` is `True`:
+                            if `set(value.keys())` != `set(annotations)`: ⤴ `False`
+                          ⤴ `all()` of (↺ with (`item`, `annotations[key]`) for `key`, `item` in `value.items()`)
+
+`NamedTuple`            ✓ `value` is instance of `tuple`
+                        ✓ `type(value)` is strictly subclass of `tuple` 
+                          + have `_fields` attr
+                          + `tuple(getattr(value, field) for field in _fields)` == `value`
+`NamedTuple()`          <type>
+
+`TypeVar`               <type>
+`TypeVar()`             if `typespec.__bound__` is not `None`:
+                          ✓ `value` is instance of `typespec.__bound__`
+                        else:
+                          ✓ `value` is instance of any type from `typespec.__constraints__`
+
+`ByteString`            ✓ `value` is bytestring
+
+`Type`                  ✓ `value` is specified type (or just `type` if no args is given)
+
+`Pattern`               ✓ `value` is `re.Pattern`
+                        ✓ `value.pattern` is instance of `__args__[0]`
+
+`Match`                 ✓ `value` is `re.Match`
+                        `value.string` is instance of `__args__[0]`
+
+`IO`                    ✓ `value` is instance of `IOBase`, mark as <todo>
+
+`TextIO`                ✓ `value` is instance of `TextIOBase`, mark as <todo>
+
+`BinaryIO`              ✓ `value` is instance of `BufferedIOBase`, mark as <todo>
