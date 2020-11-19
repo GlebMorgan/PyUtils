@@ -900,46 +900,44 @@ class TestCheckArgs:
             def meth(self, a: int, b: str, c: float):
                 pass
 
-    @fixture(scope='class', params=[None, '', 'a', 'a,', 'a,a', ['a'], 'a,b', 'a, b', ['a', 'b'], 'a,b,c'], ids=str)
+    callables_data = [
+        ('function',             (0, 's', 2.5), {},           case_function.__func__()),
+        ('method',               (0, 's', 2.5), {},           A().case_method),
+        ('method_kw',            (), dict(a=0, b='s', c=2.5), A().case_method),
+        ('invalid_bound_method', (0, 's', 2.5), {},           A.__dict__['case_method'].__get__(object)),
+        ('pos_kw_method',        (0, 's'), dict(c=2.5),       A().case_method_pos_kw),
+        ('classmethod',          (0, 's', 2.5), {},           A.case_class_method),
+        ('staticmethod',         (0, 's', 2.5), {},           A.case_static_method),
+        ('init',                 (0, 's', 2.5), {},           A().__init__),
+        ('call',                 (0, 's', 2.5), {},           A().__call__),
+        ('arbitrary_self',       (0, 's', 2.5), {},           A().case_arbitrary_self),
+        ('inner_class_method',   (0, 's', 2.5), {},           A.B().meth),
+    ]
+
+    @fixture(scope='class', params=([], ['a'], ['a', 'a'], ['a', 'c'], ['a', 'a', 'b'], ['a', 'b', 'c']), ids=str)
     def argnames(self, request):
         return request.param
-
-    callables_data = [
-        ('function', (0, 's', 2.5), {}, case_function.__func__()),
-        ('method', (0, 's', 2.5), {}, A().case_method),
-        ('method_kw', (), dict(a=0, b='s', c=2.5), A().case_method),
-        ('invalid_bound_method', (0, 's', 2.5), {}, A.__dict__['case_method'].__get__(object)),
-        ('pos_kw_method', (0, 's'), {'c': 2.5}, A().case_method_pos_kw),
-        ('classmethod', (0, 's', 2.5), {}, A.case_class_method),
-        ('staticmethod', (0, 's', 2.5), {}, A.case_static_method),
-        ('init', (0, 's', 2.5), {}, A().__init__),
-        ('call', (0, 's', 2.5), {}, A().__call__),
-        ('arbitrary_self', (0, 's', 2.5), {}, A().case_arbitrary_self),
-        ('inner_class_method', (0, 's', 2.5), {}, A.B().meth),
-    ]
 
     @fixture(scope='class', params=callables_data, ids=itemgetter(0))
     def case(self, request, argnames):
         name, args, kwargs, func = request.param
-        check_args_decorator = check_args if argnames is None else check_args(argnames)
-        return name, args, kwargs, check_args_decorator(func)
+        check_args_decorator = check_args if argnames is None else check_args(*argnames)
+        return args, kwargs, check_args_decorator(func)
 
     @fixture(scope='class')
     def case_fail(self, case):
-        name, args, kwargs, func = case
-        if kwargs:
-            if 'a' not in kwargs.keys():
-                skip("No keyword argument 'a' involved")
+        args, kwargs, func = case
+        if 'a' in kwargs.keys():
             new_kwargs = kwargs.copy()
             new_kwargs['a'] = None
             kwargs = new_kwargs
         else:
             args = (None, *args[1:])
-        return name, args, kwargs, func
+        return args, kwargs, func
 
     @fixture(scope='class')
     def case_decorator(self, argnames):
-        @check_args(argnames)
+        @check_args(*argnames)
         def dec(a: int, b: str, c: float):
             @decorator
             def wrapper(func, instance, args, kwargs):
@@ -955,16 +953,16 @@ class TestCheckArgs:
                 return 42
 
             @prop.setter
-            @check_args(argnames)
+            @check_args(*argnames)
             def prop(self, value: Union[Iterable, int]):
-                pass
+                self.a = value
         return ClassWithProperty()
 
-    @fixture(scope='class', params=['x', 'a,x', ['a', 'x'], 'x, x'], ids=str)
+    @fixture(scope='class', params=(['x'], ['a', 'x'], ['x', 'x']), ids=str)
     def case_invalid_argnames(self, request):
         def func(a: int):
             pass
-        return check_args(request.param), func
+        return check_args(*request.param), func
 
     @fixture(scope='class')
     def case_forward_ref(self):
@@ -974,42 +972,40 @@ class TestCheckArgs:
         return case_fref
 
     def test_simple(self):
-        func = check_args(None)(self.case_simple_function())
+        func = check_args()(self.case_simple_function())
         func(1)
 
     def test_simple_fail(self):
         func = check_args('a')(self.case_simple_function())
-        error_msg = self.re.escape(r"argument 'a': None does not match any value from Literal[1, 2]")
-        with raises(TypecheckError, match=error_msg):
+        error_msg = "argument 'a': None does not match any value from Literal[1, 2]"
+        with raises(TypecheckError, match=self.re.escape(error_msg)):
             func(None)
 
     def test_pass(self, case):
-        name, args, kwargs, func = case
+        args, kwargs, func = case
         func(*args, **kwargs)
 
     def test_fail(self, case_fail):
-        name, args, kwargs, func = case_fail
+        args, kwargs, func = case_fail
         with raises(TypecheckError, match="argument 'a': None is not int"):
             func(*args, **kwargs)
 
     def test_doc(self):
-        annotation = r'Union[int, Dict[str, int], Tuple[Any, str]]'
-        error_message = r"{} does not match any type specification from " + annotation
+        annotation = 'Union[int, Dict[str, int], Tuple[Any, str]]'
+        error_message = "{} does not match any type specification from " + annotation
 
         @check_args
         def func(a: Union[int, Dict[str, int], Tuple[Any, str]]):
-            pass
-
+            ...
         for arg in (1, True, {}, {1: True, 2: 's'}, (object, 's')):
             func(arg)
         for arg in (None, ('s', 0), (0, 's', 'extra')):
             with raises(TypecheckError, match=self.re.escape(error_message.format(arg))):
                 func(arg)
 
-        @check_args('a, b')
+        @check_args('a', 'b')
         def func(a: Any, b: int, c: bool):
             ...
-
         func(object, 1, 's')
 
     def test_decorator(self, case_decorator):
@@ -1021,13 +1017,18 @@ class TestCheckArgs:
         with raises(TypecheckError, match="argument 'a': None is not int"):
             case_decorator(None, [], 3)
 
-    @mark.parametrize('argnames', [None, '', 'value', 'value,'], indirect=True)
+    @mark.parametrize('argnames', ([], ['value'], ['value', 'value']), ids=str, indirect=True)
     def test_property(self, case_property, argnames):
         case_property.prop = 's'
+        assert case_property.a == 's'
+        assert case_property.prop == 42
 
-    @mark.parametrize('argnames', [None, '', 'value', 'value, '], indirect=True)
+    @mark.parametrize('argnames', ([], ['value'], ['value', 'value']), ids=str, indirect=True)
     def test_property_fail(self, case_property, argnames):
-        case_property.prop = ()
+        err_msg = "argument 'value': 1.5 does not match any type specification from Union[Iterable, int]"
+        with raises(TypecheckError, match=self.re.escape(err_msg)):
+            case_property.prop = 1.5
+        assert case_property.prop == 42
 
     def test_invalid_argnames(self, case_invalid_argnames):
         dec, func = case_invalid_argnames

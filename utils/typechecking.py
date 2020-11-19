@@ -106,11 +106,10 @@ class TypecheckError(Exception):
         super().__init__(f"argument '{varname}': " + message)
 
 
-def check_args(arguments: Union[None, str, Iterable[str]]):
+def check_args(*arguments: str):
     """
-    Decorator for typechecking wrapped function / method parameters as specified in 'arguments'
+    Decorator for typechecking wrapped function / method arguments specified in `arguments`
     Checks are performed against argument annotations of wrapped callable at the time it is being called
-    Argument names may be specified as either a string with comma-separated names or just as a list of names.
     If `arguments` are omitted, typeckecking is performed on all the parameters being passed to wrapped callable
     If wrapped function / method is already decorated, `@check_args` should be applied beforehand in most cases
     If some argument of wrapped callable has default value set to `None`, its annotation is
@@ -127,11 +126,13 @@ def check_args(arguments: Union[None, str, Iterable[str]]):
     >>> func(('s', 0))  # fails: the second item of the tuple does not match given `str` specification
     >>> func((0, 's', 'extra'))  # fails: tuple has an extra element
 
-    >>> @check_args('a, b')
+    >>> @check_args('a', 'b')
     >>> def func(a: Any, b: int, c: bool):
     >>>     ...
     >>> func(object, 1, 's')  # typechecks: only 'a' and 'b' arguments are checked
     """
+
+    # CONSIDER: `except=` option or similar to exclude specified argnames from typechecking
 
     def function_processor(function):
         nonlocal argnames
@@ -143,8 +144,6 @@ def check_args(arguments: Union[None, str, Iterable[str]]):
             annotations = type_hints
             annotations.pop('return', None)
         else:
-            if isinstance(argnames, str):
-                argnames = filter(None, (arg.strip() for arg in argnames.split(',')))
             annotations = {}
             names = tuple(sign.parameters.keys())
             for name in argnames:
@@ -163,14 +162,14 @@ def check_args(arguments: Union[None, str, Iterable[str]]):
 
         return wrapper(function)
 
-    if isinstance(arguments, (str, Iterable)) or arguments is None:
-        # Infer decorator is used with an argument, thus `arguments` contains argument names to be checked
+    if arguments == () or isinstance(arguments[0], str):
+        # Infer decorator is used with arguments, thus `arguments` is a tuple of argument names to be checked
         argnames = arguments
         return function_processor
     else:
-        # Infer decorator is used without arguments, thus `arguments` is a callable to be wrapped
-        argnames = None
-        return function_processor(arguments)
+        # Infer decorator is used without arguments, thus `arguments` contains a callable to be wrapped
+        argnames = ()
+        return function_processor(arguments[0])
 
 
 def _check_type_(value: Any, typespec: Typespec, *, argname: str):
