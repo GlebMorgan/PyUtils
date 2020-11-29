@@ -774,7 +774,7 @@ class _Type_(Tester):
             yield type(obj), Type[typespec]
 
 
-# ———————————————————————————————————————————————————— Fixtures —————————————————————————————————————————————————————— #
+# ————————————————————————————————————————————————————— Fixtures ————————————————————————————————————————————————————— #
 
 @fixture(scope='module')
 def spec_data():
@@ -855,89 +855,104 @@ def test_forward_ref():
         _check_type_(42, ForwardRef('Name'), argname='<test>')
 
 
-# —————————————————————————————————————————————— @check_args() decorator ————————————————————————————————————————————— #
+# ———————————————————————————————————————— Tests for @check_args() decorator ————————————————————————————————————————— #
 
 class TestCheckArgs:
     import re
 
-    @staticmethod
-    def case_simple_function():
-        def func(a: Literal[1, 2]):
-            pass
-        return func
-
-    @staticmethod
-    def case_function():
-        def func(a: int, b: str, c: float):
-            pass
-        return func
-
-    class A:
+    class Cases:
         def __init__(self, a: int = 0, b: str = 's', c: float = 2.5):
             pass
 
         def __call__(self, a: int, b: str, c: float):
             pass
 
-        def case_method(self, a: int, b: str, c: float):
+        def method(self, a: int, b: str, c: float):
             pass
 
-        def case_method_pos_kw(self, a: int, /, b: str, *, c: float):
+        def method_pos_kw(self, a: int, /, b: str, *, c: float):
             pass
 
         @classmethod
-        def case_class_method(cls, a: int, b: str, c: float = 0.0):
+        def class_method(cls, a: int, b: str, c: float = 0.0):
             pass
 
         @staticmethod
-        def case_static_method(a: int = 0, b: str = 's', c: float = 2.5):
+        def static_method(a: int = 0, b: str = 's', c: float = 2.5):
             pass
 
-        def case_arbitrary_self(wrong, a: int, b: str, c: float):
+        def custom_self(wrong, a: int, b: str, c: float):
             pass
 
         class B:
-            def meth(self, a: int, b: str, c: float):
+            def method(self, a: int, b: str, c: float):
                 pass
 
-    callables_data = [
-        ('function',             (0, 's', 2.5), {},           case_function.__func__()),
-        ('method',               (0, 's', 2.5), {},           A().case_method),
-        ('method_kw',            (), dict(a=0, b='s', c=2.5), A().case_method),
-        ('invalid_bound_method', (0, 's', 2.5), {},           A.__dict__['case_method'].__get__(object)),
-        ('pos_kw_method',        (0, 's'), dict(c=2.5),       A().case_method_pos_kw),
-        ('classmethod',          (0, 's', 2.5), {},           A.case_class_method),
-        ('staticmethod',         (0, 's', 2.5), {},           A.case_static_method),
-        ('init',                 (0, 's', 2.5), {},           A().__init__),
-        ('call',                 (0, 's', 2.5), {},           A().__call__),
-        ('arbitrary_self',       (0, 's', 2.5), {},           A().case_arbitrary_self),
-        ('inner_class_method',   (0, 's', 2.5), {},           A.B().meth),
+    data_argnames = ('noargs', [], ['a'], ['a', 'a'], ['a', 'c'], ['a', 'a', 'b'], ['a', 'b', 'c'])
+
+    data_methods = [
+        # test case name          args, kwargs                 bind to      method name
+        ('method',                (0, 's', 2.5), {},           Cases(),     'method'),
+        ('method_kw',             (), dict(a=0, b='s', c=2.5), Cases(),     'method'),
+        ('pos_kw_method',         (0, 's'), dict(c=2.5),       Cases(),     'method_pos_kw'),
+        ('custom_bound',          (0, 's', 2.5), {},           object(),    'method'),
+        ('class.classmethod',     (0, 's', 2.5), {},           Cases,       'class_method'),
+        ('instance.classmethod',  (0, 's', 2.5), {},           Cases(),     'class_method'),
+        ('class.staticmethod',    (0, 's', 2.5), {},           Cases,       'static_method'),
+        ('instance.staticmethod', (0, 's', 2.5), {},           Cases(),     'static_method'),
+        ('init',                  (0, 's', 2.5), {},           Cases(),     '__init__'),
+        ('call',                  (0, 's', 2.5), {},           Cases(),     '__call__'),
+        ('custom_self',           (0, 's', 2.5), {},           Cases(),     'custom_self'),
     ]
 
-    @fixture(scope='class', params=([], ['a'], ['a', 'a'], ['a', 'c'], ['a', 'a', 'b'], ['a', 'b', 'c']), ids=str)
-    def argnames(self, request):
-        return request.param
+# ————————————————————————————————————————————————————— Fixtures ————————————————————————————————————————————————————— #
 
-    @fixture(scope='class', params=callables_data, ids=itemgetter(0))
-    def case(self, request, argnames):
-        name, args, kwargs, func = request.param
-        check_args_decorator = check_args if argnames is None else check_args(*argnames)
-        return args, kwargs, check_args_decorator(func)
+    @fixture(scope='class', params=data_argnames, ids=''.join)
+    def argnames(self, request):
+        return request.param if request.param != 'noargs' else None
 
     @fixture(scope='class')
-    def case_fail(self, case):
-        args, kwargs, func = case
+    def check_args_decorator(self, argnames):
+        return check_args if argnames is None else check_args(*argnames)
+
+    @fixture(scope='class')
+    def check_args_decorator_check_defaults(self, argnames):
+        return check_args(check_defaults=True) if argnames is None else check_args(*argnames, check_defaults=True)
+
+    @fixture(scope='class')
+    def case_simple_function(self):
+        def func(a: Literal[1, 2]):
+            pass
+        return func
+
+    @fixture(scope='class')
+    def case_function(self, check_args_decorator):
+        @check_args_decorator
+        def func(a: int, b: str, c: float):
+            pass
+        return
+
+    @fixture(scope='class', params=data_methods, ids=itemgetter(0))
+    def case_method(self, request, check_args_decorator):
+        name, args, kwargs, instance, func_name = request.param
+        func = self.Cases.__dict__[func_name]
+        bound_wrapper = check_args_decorator(func).__get__(instance, None)
+        return name, args, kwargs, bound_wrapper
+
+    @fixture(scope='class')
+    def case_method_fail(self, case_method):
+        name, args, kwargs, meth = case_method
         if 'a' in kwargs.keys():
             new_kwargs = kwargs.copy()
             new_kwargs['a'] = None
             kwargs = new_kwargs
         else:
             args = (None, *args[1:])
-        return args, kwargs, func
+        return name, args, kwargs, meth
 
     @fixture(scope='class')
-    def case_decorator(self, argnames):
-        @check_args(*argnames)
+    def case_decorator(self, check_args_decorator):
+        @check_args_decorator
         def dec(a: int, b: str, c: float):
             @decorator
             def wrapper(func, instance, args, kwargs):
@@ -958,6 +973,15 @@ class TestCheckArgs:
                 self.a = value
         return ClassWithProperty()
 
+    @fixture(scope='class')
+    def case_outer_staticmethod(self, check_args_decorator):
+        class ClassWithStaticmethod:
+            @staticmethod
+            @check_args_decorator
+            def outer_static_method(a:int, b:str, c:float=2.5):
+                pass
+        return ClassWithStaticmethod
+
     @fixture(scope='class', params=(['x'], ['a', 'x'], ['x', 'x']), ids=str)
     def case_invalid_argnames(self, request):
         def func(a: int):
@@ -967,28 +991,38 @@ class TestCheckArgs:
     @fixture(scope='class')
     def case_forward_ref(self):
         @check_args
-        def case_fref(a: TestCheckArgs.A):
+        def case_fref(a: TestCheckArgs.Cases):
             pass
         return case_fref
 
-    def test_simple(self):
-        func = check_args()(self.case_simple_function())
+    @fixture(scope='class')
+    def case_init(self, check_args_decorator):
+        class ClassWithInit:
+            @check_args_decorator
+            def __init__(self, a: int, b: str, c: float = 2.5):
+                self.a = a
+                self.b = b
+                self.c = c
+        return ClassWithInit
+
+    @fixture(scope='class')
+    def case_check_defaults(self, check_args_decorator_check_defaults):
+        @check_args_decorator_check_defaults
+        def func(a: int = 's', b: str = 's', c: float = 1.0):
+            pass
+        return func
+
+# —————————————————————————————————————————————————————— Tests ——————————————————————————————————————————————————————— #
+
+    def test_simple(self, case_simple_function):
+        func = check_args(case_simple_function)
         func(1)
 
-    def test_simple_fail(self):
-        func = check_args('a')(self.case_simple_function())
+    def test_simple_fail(self, case_simple_function):
+        func = check_args('a')(case_simple_function)
         error_msg = "argument 'a': None does not match any value from Literal[1, 2]"
         with raises(TypecheckError, match=self.re.escape(error_msg)):
             func(None)
-
-    def test_pass(self, case):
-        args, kwargs, func = case
-        func(*args, **kwargs)
-
-    def test_fail(self, case_fail):
-        args, kwargs, func = case_fail
-        with raises(TypecheckError, match="argument 'a': None is not int"):
-            func(*args, **kwargs)
 
     def test_doc(self):
         annotation = 'Union[int, Dict[str, int], Tuple[Any, str]]'
@@ -999,7 +1033,7 @@ class TestCheckArgs:
             ...
         for arg in (1, True, {}, {1: True, 2: 's'}, (object, 's')):
             func(arg)
-        for arg in (None, ('s', 0), (0, 's', 'extra')):
+        for arg in (None, ['s', 1], ('s', 0), (0, 's', 'extra')):
             with raises(TypecheckError, match=self.re.escape(error_message.format(arg))):
                 func(arg)
 
@@ -1007,6 +1041,18 @@ class TestCheckArgs:
         def func(a: Any, b: int, c: bool):
             ...
         func(object, 1, 's')
+
+    def test_function(self, case_function):
+        case_function(0, 's', 2.5)
+
+    def test_pass(self, case_method):
+        name, args, kwargs, meth = case_method
+        meth(*args, **kwargs)
+
+    def test_fail(self, case_method_fail):
+        name, args, kwargs, meth = case_method_fail
+        with raises(TypecheckError, match="argument 'a': None is not int"):
+            meth(*args, **kwargs)
 
     def test_decorator(self, case_decorator):
         dec = case_decorator(1, 's', 2.5)
@@ -1030,10 +1076,40 @@ class TestCheckArgs:
             case_property.prop = 1.5
         assert case_property.prop == 42
 
+    def test_outer_staticmethod(self, case_outer_staticmethod):
+        case_outer_staticmethod.outer_static_method(1, 's')
+        case_outer_staticmethod().outer_static_method(2, 's')
+
     def test_invalid_argnames(self, case_invalid_argnames):
         dec, func = case_invalid_argnames
         with raises(ValueError, match=r"non-existent argument name 'x'"):
             dec(func)
 
     def test_forward_refs(self, case_forward_ref):
-        case_forward_ref(self.A())
+        case_forward_ref(self.Cases())
+
+    def test_implicit_init(self, case_init):
+        case_init(1, 's')
+
+    def test_fail_implicit_init(self, case_init):
+        err_msg = "argument 'a': 's1' is not int"
+        with raises(TypecheckError, match=self.re.escape(err_msg)):
+            case_init('s1', 's2')
+
+    def test_invalid_signature(self, case_method):
+        name, args, kwargs, meth = case_method
+        if name.endswith('staticmethod') or name == 'init':
+            skip("Argument 'a' of 'staticmethod' and 'init' tests is optional")
+        with raises(TypeError, match="missing a required argument: 'a'"):
+            meth()
+
+    def test_class_decorator(self, check_args_decorator):
+        err_msg = "@check_args decorator cannot be applied to classes, __init__() method could be decorated instead"
+        with raises(TypeError, match=self.re.escape(err_msg)):
+            @check_args_decorator
+            class CaseClassDecorator:
+                pass
+
+    def test_check_defaults(self, case_check_defaults):
+        with raises(TypecheckError, match="argument 'a': 's' is not int"):
+            case_check_defaults()
