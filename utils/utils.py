@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from itertools import islice, repeat
-from typing import Callable
+from typing import Any, Callable, Iterator
 
 from wrapt import decorator
 
@@ -10,7 +10,8 @@ from wrapt import decorator
 # TODO: short module description, purpose
 
 
-__all__ = ['sampledict', 'bytewise', 'bitwise', 'deprecated', 'autorepr']
+__all__ = ['sampledict', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'typename', 'spy']
+
 
 
 sampledict = {
@@ -125,3 +126,42 @@ def autorepr(msg: str) -> Callable:
         cls = self.__class__
         return f"<{cls.__module__}.{cls.__qualname__} {msg} at {hex(id(self))}>"
     return __repr__
+
+
+def typename(obj: Any) -> str:
+    """Return simple name of the class of given object"""
+    return obj.__class__.__name__
+
+
+class spy:
+    """
+    Iterator around given iterable with separate independent iterator branch for lookahead
+    `.lookahead()` returns an iterator that advances the underlying iterable,
+        but does not influence on main iteration branch
+    `spy` object itself works just as conventional iterable regardless of `.lookahead()` state
+    >>> iterator = spy(range(1, 3))  # spy object wraps range(5)
+    >>> lookahead = iterator.lookahead()  # independent lookahead iterator is created
+    >>> assert lookahead.__next__() == 1
+    >>> assert iterator.__next__() == 1
+    >>> assert list(lookahead) == [2, 3]
+    >>> assert list(iterator) == [2, 3]
+    >>> assert list(lookahead) == []  # exhausted
+    """
+
+    def __init__(self, iterable):
+        self.source = iter(iterable)
+        self.cache = []
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.cache:
+            return self.cache.pop(0)
+        else:
+            return next(self.source)
+
+    def lookahead(self) -> Iterator:
+        for item in self.source:
+            self.cache.append(item)
+            yield item

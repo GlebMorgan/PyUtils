@@ -1,10 +1,13 @@
+import string
 from inspect import signature
+from itertools import islice
 from operator import itemgetter
 from random import choices
+from typing import NamedTuple, Iterator, Iterable, List, Callable, Dict
 
-from pytest import fixture, mark, raises, warns
+from pytest import fixture, mark, raises, warns, param
 
-from utils import bytewise, bitwise, deprecated, autorepr
+from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, typename
 
 
 class TestBytewise:
@@ -195,3 +198,125 @@ class TestAutorepr:
         assert repr(instance) == f'<{__name__}.{qualname} {message} at {hex(obj_id)}>'
         assert instance.__repr__.__name__ == '__repr__'
         assert instance.__repr__.__self__ == instance
+
+
+class TestSpy:
+    """
+    Iterables: range object, tuple, dict, dict.items(), string
+    Number of elements: 0, 1, 2, 3, 8, 90
+    Lookahead depth: 1, 2, half of iterable, up to penultimate element, all
+    • check lookahead:
+        • wrap iterable in `spy()` object
+        • advance `spy.lookahead()` iterator for N elements
+        • check `spy` object and `spy.lookahead()` both conform to iterator protocol
+        • check introspected elements being exactly the first N items from original iterable
+        • check elements left in `spy.lookahead()` iterator being exactly the remaining items of original iterable
+        • check `spy()` object itself gives the same items being iterated over as original iterable does
+        • check both `spy()` and `spy.lookahead()` iterators are fully exhausted
+    • check iterable is exhausted only if spy.lookahead() or original iterable is advanced
+    • check nothing breaks if `spy.lookahead()` is attempted to be advanced beyond the size of the original iterable
+    """
+
+    IterableGen = Callable[[int], Iterable]
+
+    class LookaheadTestcase(NamedTuple):
+        spy: spy  # spy object wrapping the iterable
+        lookahead: Iterator  # spy.lookahead() iterator, consumed to some point
+        introspected: list  # items taken via lookahead
+        k: int  # amount of elements introspected
+        reference: list  # snapshot of original iterable contents
+
+    sizes = [0, 1, 2, 3, 8, 80]
+    iterable_generators: Dict[str, IterableGen] = {
+        'range':      range,
+        'tuple':      lambda n: tuple(range(n)),
+        'dict':       lambda n: {str(i): i for i in range(n)},
+        'dict.items': lambda n: {str(i): i for i in range(n)}.items(),
+        'str':        lambda n: string.printable[:n],
+    }
+
+    @staticmethod
+    def lookahead_params(sizes: List[int], generators: Dict[str, IterableGen]):
+        """
+        Generator of test parameters for `testcase` fixture
+        Yields param(original iterable, lookahead depth, reference iterable snapshot)
+        """
+
+        for n in sizes:
+            if n == 0:
+                lookahead_depths = [0, 1]
+            elif n > 5:
+                lookahead_depths = [0, 1, n//2, n-2, n-1]
+            else:
+                lookahead_depths = range(n)
+            for depth in lookahead_depths:
+                for name, generator in generators.items():
+                    yield param((generator(n), depth, list(generator(n))), id=f'{name}-{n}-{depth}')
+
+    @staticmethod
+    def overflow_params(sizes: List[int], generators: Dict[str, IterableGen]):
+        """
+        Generator of test parameters for `testcase` fixture
+        Yields param(original iterable, lookahead depth, reference iterable snapshot)
+        """
+        for n in sizes:
+            for name, generator in generators.items():
+                yield param((generator(n), n+1, list(generator(n))), id=f'{name}-{n}')
+
+    @fixture
+    def lookahead_testcase(self, request):
+        """
+        Fixture to generate test cases for lookahead
+        Yields (test node id, iterable size, spy object, advanced lookahead iterator, reference list)
+        """
+        iterable, depth, reference = request.param
+        spy_object = spy(iterable)
+        lookahead = spy_object.lookahead()
+        introspected = list(islice(lookahead, depth))
+        return self.LookaheadTestcase(spy_object, lookahead, introspected, depth, reference)
+
+    @fixture(params=[range(8), list(range(8)), islice(range(10), 8)], ids=typename)
+    def laziness_testcase(self, request):
+        spy_object = spy(request.param)
+        return spy_object, spy_object.lookahead()
+
+    def test_doc(self):
+        iterator = spy(range(1, 4))
+        lookahead = iterator.lookahead()
+        assert lookahead.__next__() == 1
+        assert iterator.__next__() == 1
+        assert list(lookahead) == [2, 3]
+        assert list(iterator) == [2, 3]
+        assert list(lookahead) == []
+
+    @mark.parametrize('lookahead_testcase', lookahead_params.__func__(sizes, iterable_generators), indirect=True)
+    def test_lookahead(self, lookahead_testcase):
+        spy_object, lookahead, introspected, k, reference = lookahead_testcase
+        for attr in '__next__', '__iter__':
+            assert hasattr(spy_object, attr)
+            assert hasattr(lookahead, attr)
+        assert introspected == reference[:k]
+        assert list(lookahead) == reference[k:]
+        assert list(spy_object) == reference
+        with raises(StopIteration):
+            spy_object.__next__()
+        with raises(StopIteration):
+            lookahead.__next__()
+
+    @mark.parametrize('lookahead_testcase', overflow_params.__func__(sizes, iterable_generators), indirect=True)
+    def test_lookahead_overflow(self, lookahead_testcase):
+        spy_object, lookahead, introspected, k, reference = lookahead_testcase
+        assert introspected == reference
+        assert list(lookahead) == []
+        assert list(spy_object) == reference
+
+    def test_laziness(self, laziness_testcase):
+        spy_object, lookahead = laziness_testcase
+        for i in range(4):
+            item = lookahead.__next__()
+            assert spy_object.__next__() is item
+            assert spy_object.__next__() == item + 1
+        with raises(StopIteration):
+            spy_object.__next__()
+        with raises(StopIteration):
+            lookahead.__next__()
