@@ -10,26 +10,68 @@ from wrapt import decorator
 # TODO: short module description, purpose
 
 
-__all__ = ['sampledict', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'typename', 'spy']
+
+__all__ = ['test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'typename', 'spy']
 
 
+class test:
+    """Sample collections namespace class"""
 
-sampledict = {
-    1: 'a',
-    2: 'b',
-    'None': None,
-    'bool': True,
-    'str': 'python',
-    'multilineStr': '1st str' + '\n' + '2nd str',
-    'ellipsis': ...,
-    'list': [1, 2, 3, 4, 5, ('a', 'b', 'c'), ..., None],
-    'dict': {1: 'first', 2: 'second'},
-    'object': object(),
-    'errorClass': RuntimeError,
-    'function': print,
-    'module': re,
-}
-sampledict['self'] = sampledict
+    dict = dict(a=0, b=True, c='item', d=42, e=..., f=1.0, g=None, h=(1, 2, 3))
+    list = [*dict.values()]
+    set = {*list}
+    # Number collections
+    ndict = {i: f'item{i}' for i in range(10)}
+    nlist = [*ndict.keys()]
+    nset = {*nlist}
+
+    # String collections
+    sdict = {
+        'beautiful': 'better than ugly',
+        'explicit': 'better than implicit',
+        'simple': 'better than complex',
+        'complex': 'better than complicated',
+        'flat': 'better than nested',
+        'sparse': 'better than dense',
+        'readability': 'counts',
+        'practicality': 'beats purity',
+        'errors': 'never passed silently',
+        'namespaces': 'one honking great idea',
+    }
+    slist = [*sdict.keys()]
+    sset = {*slist}
+
+    # Mixed-type collections
+    mdict = {
+        1: 'a',
+        2: 'b',
+        3: 'c',
+        'None': None,
+        'bool': True,
+        'str': 'python',
+        'lstr': 'long example string that presumably have little chances '
+                'to fit onto one single line (unless you use 4K monitor :)',
+        'mstr': '1st str' + '\\n' + '2nd str',
+        'ellipsis': ...,
+        'list': [1, 2, 3, 4, 5, ('a', 'b', 'c'), ..., None],
+        'empty': [],
+        'tuple': tuple(range(12)),
+        'dict': {1: 'first', 2: 'second'},
+        'object': object(),
+        'class': RuntimeError,
+        'function': print,
+        'module': re,
+    }
+    mlist = [*mdict.values()]
+    mset = {item for item in mlist if item.__hash__}
+
+    # Mixed-type collections with self-reference
+    selfdict = dict.copy();  selfdict['self'] = selfdict
+    selflist = [*dict.values()];  selflist.append(selflist)
+    # NOTE: `selfset` does not exist due to self-reference is unhashable
+
+    # Names of all collections defined
+    all = [name for name in locals() if name[0] != '_']
 
 
 def bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool = True) -> str:
