@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from itertools import islice, repeat
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 from wrapt import decorator
 
@@ -170,9 +170,75 @@ def autorepr(msg: str) -> Callable:
     return __repr__
 
 
+def schain(*items):
+    """
+    SmartChain – extended `itertools.chain()`
+      • accepts singular objects as well as iterables
+      • treats `str` as items, not iterables
+    >>> assert [*schain(-1, range(3), 8)] == [-1, 0, 1, 2, 8]  # accepts non-iterable objects
+    >>> assert [*schain(('foo', 'bar'), 'solid')] == ['foo', 'bar', 'solid'] # does not tear strings apart
+    >>> assert [*schain(range(3), 3, [], 42)] == [0, 1, 2, 3, 42]  # iterables and items could go in any order
+    """
+    for item in items:
+        if isinstance(item, str):
+            yield item
+        elif hasattr(item, '__iter__'):
+            yield from item
+        else:
+            yield item
+
+
+def isdunder(name: str) -> bool:
+    """Return whether `name` is a __double_underscore__ name (from enum module)"""
+    return (name[:2] == name[-2:] == '__' and
+            name[2:3] != '_' and name[-3:-2] != '_' and
+            len(name) > 4)
+
+
+def issunder(name):
+    """Return whether `name` is a _single_underscore_ name"""
+    return (name[:1] == name[-1:] == '_' and
+            name[1:2] != '_' and name[-2:-1] != '_' and
+            len(name) > 2)
+
+
+def isiterable(obj) -> bool:
+    """Return whether `obj` is iterable, considering `str` and `bytes` are not"""
+    if isinstance(obj, (str, bytes)):
+        return False
+    else:
+        return isinstance(obj, Iterable)
+
+
 def typename(obj: Any) -> str:
     """Return simple name of the class of given object"""
     return obj.__class__.__name__
+
+
+class Disposable:
+    """
+    Descriptor that clears its value after each access
+    >>> class Class:
+    ...     attr = Disposable(100500)
+    >>> obj = Class()
+    >>> assert obj.attr == 100500  # returns initial value
+    >>> obj.attr = 42  # descriptor value is set to 42
+    >>> assert obj.attr == 42  # first access returns value
+    >>> assert obj.attr is None  # subsequent access returns None
+    """
+
+    def __init__(self, value=None):
+        self.value = value
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        value = self.value
+        self.value = None
+        return value
+
+    def __set__(self, instance, value):
+        self.value = value
 
 
 class spy:
@@ -207,3 +273,108 @@ class spy:
         for item in self.source:
             self.cache.append(item)
             yield item
+
+
+class GetterDescriptor:
+    """
+    Decorator implementing getter-only attribute descriptor
+    Wraps given getter function into descriptor object that uses its return value when
+        instance attribute with the same name as was assigned to descriptor itself is acessed
+    Attribute setting and deletion procedures are left unaffected
+    Signature of decorated getter method should be `getter(self, value) -> returned`:
+        • `value` – the actual value of requested instance attribute stored in instance `__dict__`
+        • `returned` – getter return value that is to be returned to outer code requesting the attribute
+    >>> class GetterExample:
+    ...     @getter
+    ...     def attr(self, value):
+    ...         # handle acquired value somehow...
+    ...         return str(value)
+    ...
+    >>> instance = GetterExample()
+    >>> instance.attr = 42
+    >>> assert instance.__dict__['attr'] == 42  # store unchanged
+    >>> assert instance.attr == '42'  # acquire modified
+    """
+
+    # NOTE: __slots__ break dynamic docstrings
+
+    def __init__(self, func):
+        self.name: str
+        self.getter = func
+        self.__doc__ = func.__doc__
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        try:
+            value = instance.__dict__[self.name]
+        except KeyError:
+            message = f"'{instance.__class__.__name__}' object has no attribute '{self.name}'"
+            raise AttributeError(message) from None
+        return self.getter(instance, value)
+
+    def __set__(self, instance, value):
+        # Required to make the class a data descriptor
+        instance.__dict__[self.name] = value
+
+
+class SetterDescriptor:
+    """
+    Decorator implementing setter-only attribute descriptor
+    Wraps given setter function into descriptor object that assigns its return value
+        to instance attribute with the same name as was assigned to descriptor itself
+    Attribute access and deletion procedures are left unaffected
+    Signature of decorated setter method should be `setter(self, value) -> stored`:
+        • `value` – the value being set to instance attribute from outer code
+        • `stored` – return value that is to be actually assigned to instance attribute
+    >>> class SetterExample:
+    ...     @setter
+    ...     def attr(self, value):
+    ...         # handle reassignment somehow...
+    ...         return str(value)
+    ...
+    >>> instance = SetterExample()
+    >>> instance.attr = 42
+    >>> assert instance.__dict__['attr'] == '42'  # store modified
+    >>> assert instance.attr == '42'  # acquire unchanged
+    """
+
+    # NOTE: __slots__ break dynamic docstrings
+
+    def __init__(self, func):
+        self.name: str
+        self.setter = func
+        self.__doc__ = func.__doc__
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __set__(self, instance, value):
+        instance.__dict__[self.name] = self.setter(instance, value)
+
+
+getter = GetterDescriptor
+setter = SetterDescriptor
+
+
+def legacy(function):
+    """
+    Decorator to mark wrapped function or method is out of use
+    Raises `RuntimeError` if an attempt to call the wrapped object is made
+    """
+    def wrapper(*args, **kwargs):
+        obj_type: str = function.__class__.__name__.replace('type', 'class')
+        raise RuntimeError(f"{obj_type} '{function.__name__}' is marked as legacy")
+    return wrapper
+
+
+# TODO: Null - sentinel object for denoting absence of value
+#   Should never be assigned to anything by user code
+#   Make NullType a singleton
+#   Leave NullType defined inside the module the usual way, but just do not include it into __all__
+
+
+# CONSIDER: listAttrs() coloring attrs based on type (method, function, dict attr, inherited attr, etc.)
