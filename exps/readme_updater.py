@@ -168,7 +168,7 @@ def update_readme(project: str, module_name: str):
 if __name__ == '__main__':
 
     if len(sys.argv) < 3:
-        raise RuntimeError("Project path and module name should be specified")
+        raise RuntimeError("project path and module name should be specified")
 
     path = sys.argv[1]
     module = sys.argv[2]

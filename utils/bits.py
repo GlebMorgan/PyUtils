@@ -134,7 +134,7 @@ class Bits(int):
             if marker.isdecimal():
                 i = int(marker)
                 if result[i] is not Ellipsis:
-                    raise ValueError(f"Duplicate mask marker group: {marker}")
+                    raise ValueError(f"duplicate mask marker group: {marker}")
                 result[i] = self >> pos & (2 ** size - 1)
         return tuple(num for num in result if num is not Ellipsis)
 
@@ -156,7 +156,7 @@ class Bits(int):
             if marker in mask:
                 before, group, *after = re.split(rf'({marker}+)', mask)
                 if len(after) > 1:
-                    raise ValueError(f"Duplicate mask marker group: {marker}")
+                    raise ValueError(f"duplicate mask marker group: {marker}")
                 result.append(self >> len(after[0]) & (2 ** len(group) - 1))
         return result
 
@@ -199,7 +199,6 @@ class Bits(int):
                     result |= (nums[i] & num_mask) << pos
                     result_mask |= num_mask << pos
                 except IndexError:
-                    raise ValueError(f"Invalid mask index marker: {marker}. "
-                                     f"Indexes should start from 0 "
-                                     f"and not exceed the count of inserted values") from None
+                    details = "Indexes should start from 0 and not exceed the count of inserted values"
+                    raise ValueError(f"invalid mask index marker: {marker}. {details}") from None
         return Bits(self & ~result_mask | result)

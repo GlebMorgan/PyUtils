@@ -32,7 +32,7 @@ class Benchmark:
         self.owner: type = owner
         self.prefix = self.owner.__name__ + '.' if self.owner else ''
         if len(functions) != 2:
-            raise ValueError("Can only compare 2 functions / methods")
+            raise ValueError("can only compare 2 functions / methods")
         self.functions: Tuple[Callable, Callable] = functions
         self.names = tuple(f.__name__ for f in self.functions)
         self.kwargs: dict = kwargs
@@ -149,6 +149,6 @@ if __name__ == '__main__':
         options = {name: eval(value) for name, value in (spec.split('=') for spec in cmd.options)}
         benchmark = benchmarks.get(cmd.bench, None)
         if benchmark is None:
-            raise ValueError(f"Invalid benchmark id: {cmd.bench} (use -l to list available ids)")
+            raise ValueError(f"invalid benchmark id: {cmd.bench} (use -l to list available ids)")
 
         benchmark(cmd.size, **options).run(cmd.runs)
