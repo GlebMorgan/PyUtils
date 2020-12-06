@@ -81,9 +81,9 @@ def bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool =
     In case the length of `byteseq` exceeds the value of specified `limit` argument, extra part of
         output is collapsed to an ellipsis and only the last element is shown after it (see example)
     If output is trimmed, `show_len` argument tells whether '(`<n>` bytes)' is appended to output
-    >>> bytewise(b'12345', sep='-') == '31-32-33-34-35'
-    >>> bytewise(bytes.fromhex('00 01 42 5A FF')) == '00 01 42 5A FF'
-    >>> bytewise(b'python', limit=5) == '70 79 74 .. 6E (6 bytes)'
+    >>> assert bytewise(b'12345', sep='-') == '31-32-33-34-35'
+    >>> assert bytewise(bytes.fromhex('00 01 42 5A FF')) == '00 01 42 5A FF'
+    >>> assert bytewise(b'python', limit=5) == '70 79 74 .. 6E (6 bytes)'
     """
 
     octets = map(''.join, zip(*repeat(iter(byteseq.hex().upper()), 2)))
@@ -116,8 +116,8 @@ def bytewise2(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool 
 def bitwise(byteseq: bytes, sep: str = ' ') -> str:
     """
     Return string representation of `byteseq` as binary octets separated by `sep`
-    >>> bitwise(b'abc') == '01100001 01100010 01100011'
-    >>> bitwise(bytes.fromhex('00 0A FF')) == '00000000 00001010 11111111'
+    >>> assert bitwise(b'abc') == '01100001 01100010 01100011'
+    >>> assert bitwise(bytes.fromhex('00 0A FF')) == '00000000 00001010 11111111'
     """
     return sep.join(f"{byte:08b}" for byte in byteseq)
 
