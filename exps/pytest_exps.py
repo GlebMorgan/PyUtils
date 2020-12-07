@@ -36,7 +36,7 @@ def test_fixture_nested(fixture_nested):
     assert 1
 
 
-# ——————————————————————————— Fixture parametrization via @mark.parametrize(indirect=True) ——————————————————————————— #
+# ———————————————————————————— Parametrization of fixture arguments via @mark.parametrize ———————————————————————————— #
 
 @fixture(params=('a', 'b', 'c', 'd', 'e'))
 def fixture_parametrize(request, arg):

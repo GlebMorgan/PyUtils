@@ -9,6 +9,7 @@ from wrapt import decorator
 
 # TODO: short module description, purpose
 
+# TODO: add 'raises' to docstrings everywhere
 
 
 __all__ = ['test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'typename', 'spy']
@@ -17,9 +18,11 @@ __all__ = ['test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'typename', 
 class test:
     """Sample collections namespace class"""
 
+    # Simple collections
     dict = dict(a=0, b=True, c='item', d=42, e=..., f=1.0, g=None, h=(1, 2, 3))
     list = [*dict.values()]
     set = {*list}
+
     # Number collections
     ndict = {i: f'item{i}' for i in range(10)}
     nlist = [*ndict.keys()]
@@ -90,7 +93,7 @@ def bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool =
     if limit is None or len(byteseq) <= limit:
         return sep.join(octets)
     if limit < 2:
-        raise ValueError("Cannot limit sequence to less than 2 bytes")
+        raise ValueError("cannot limit sequence to less than 2 bytes")
     else:
         head = islice(octets, limit - 2)  # account for last byte + '..'
         last = byteseq[-1:].hex().upper()
@@ -99,13 +102,13 @@ def bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool =
 
 
 def bytewise2(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool = True) -> str:
-    """
-    More readable, but 2.5 times slower implementation of `bytewise()`
-    """
+    """More readable, but 2.5 times slower implementation of `bytewise()`"""
 
     octets = (f'{byte:02X}' for byte in byteseq)
     if limit is None or len(byteseq) <= limit:
         return sep.join(octets)
+    if limit < 2:
+        raise ValueError("cannot limit sequence to less than 2 bytes")
     else:
         head = islice(octets, limit - 2)
         last = f'{byteseq[-1]:02X}'
@@ -129,7 +132,8 @@ def deprecated(reason: str):
         Minimal required filter is 'default::DeprecationWarning:utils'
     If `reason` argument is specified, it will be displayed after the warning message
     >>> @deprecated('duck tape')
-    >>> def func(): ...
+    >>> def func():
+    >>>     ...
     >>> func()
         "DeprecationWarning: Function 'func' is marked as deprecated (duck tape)"
     """
@@ -137,6 +141,7 @@ def deprecated(reason: str):
     @decorator
     def deprecation_wrapper(wrapped, instance, args, kwargs):
         from warnings import warn
+        nonlocal details
         wrapee = wrapped.__class__.__name__.replace('type', 'class')
         message = f"{wrapee.capitalize()} '{wrapped.__name__}' is marked as deprecated"
         if details:
@@ -156,7 +161,7 @@ def deprecated(reason: str):
         return deprecation_wrapper(reason)
 
 
-def autorepr(msg: str) -> Callable:
+def autorepr(msg: str) -> Callable[[Any], str]:
     """
     Generate canonical `__repr__()` method using provided `msg`
     >>> class Belarus:
