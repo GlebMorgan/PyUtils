@@ -930,7 +930,7 @@ class TestCheckArgs:
         @check_args_decorator
         def func(a: int, b: str, c: float):
             pass
-        return
+        return func
 
     @fixture(scope='class', params=data_methods, ids=itemgetter(0))
     def case_method(self, request, check_args_decorator):
