@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+from contextlib import nullcontext
 from itertools import islice, repeat
-from typing import Any, Callable, Iterable, Iterator
+from subprocess import run
+from typing import Any, Callable, Iterable, Iterator, Type
 
 from wrapt import decorator
 
@@ -11,8 +13,11 @@ from wrapt import decorator
 
 # TODO: add 'raises' to docstrings everywhere
 
-
-__all__ = ['test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'typename', 'spy']
+__all__ = [
+    'test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'schain', 'isdunder', 'issunder', 'isiterable',
+    'typename', 'spy', 'Disposable', 'getter', 'setter', 'legacy', 'stack', 'Dummy', 'null', 'clipboard',
+    'ignore', 'classproperty',
+]
 
 
 class test:
@@ -376,10 +381,116 @@ def legacy(function):
     return wrapper
 
 
-# TODO: Null - sentinel object for denoting absence of value
-#   Should never be assigned to anything by user code
-#   Make NullType a singleton
-#   Leave NullType defined inside the module the usual way, but just do not include it into __all__
+def stack(iterable, *, indent=4):
+    """Print iterable in a column"""
+    whitespace = ' '*indent
+    if isinstance(iterable, dict):
+        items = (f'{whitespace}{key}: {item}' for key, item in iterable.items())
+    else:
+        items = (f'{whitespace}{item}' for item in iterable)
+    print('\n'.join(items))
 
 
-# CONSIDER: listAttrs() coloring attrs based on type (method, function, dict attr, inherited attr, etc.)
+class Dummy:
+    """
+    Mock no-op class returning itself on every attr access or method call
+    Intended for avoiding both if-checks and attribute errors when dealing with objects
+    Evaluates to False on logical operations
+    >>> dummy = Dummy('whatever', accepts='any args')
+    >>> assert str(dummy) == 'Dummy'
+    >>> assert dummy.whatever is dummy
+    >>> assert dummy.method('any', 'args') is dummy
+    >>> assert dummy('any', 'args') is dummy
+    >>> assert bool(dummy) is False
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    __repr__ = autorepr('object')
+
+    def __getattr__(self, item):
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __bool__(self):
+        return False
+
+
+class NullType:
+    """
+    Sentinel object for denoting the absence of a value
+    Should not be used as a distinct value for some attribute or variable
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, *args, **kwargs):
+        return null
+
+    def __str__(self):
+        return 'N/A'
+
+    def __repr__(self):
+        return f"<Null object at {hex(id(self))}>"
+
+    def __bool__(self):
+        return False
+
+
+null = object.__new__(NullType)
+
+
+def clipboard(text: str):
+    """
+    Put given string into Windows clipboard
+    Raises `subprocess.CalledProcessError` if underlying `clip` utility returns non-zero exit code
+    """
+    run(f'echo | set /p nul={text.strip()}| clip', check=True)
+
+
+class ignore:
+    """
+    Context manager for filtering specified errors
+    Accepts any amount of exception types, subclasses are respected
+    If no error type is provided, returns nullcontext that does nothing –
+        that simplifies usage in case exception types are calculated dymamically
+    >>> with ignore(LookupError):
+    ...     raise KeyError()  # KeyError is a subclass of LookupError, so it is filtered out
+    >>> with ignore(LookupError):
+    ...     raise RuntimeError('message')  # RuntimeError does not pass a filter, so it is raised
+        "RuntimeError: message"
+    >>> with ignore():
+    ...     raise Exception('message')  # no exception types are being passed, so nothing is filtered
+        "Exception: message"
+    """
+
+    def __new__(cls, *args):
+        if args == ():
+            return nullcontext()
+        return super().__new__(cls)
+
+    def __init__(self, *error_types: Type[Exception]):
+        self.exctypes = error_types
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exctype, exc, traceback):
+        return isinstance(exc, self.exctypes)
+
+
+class classproperty:
+    """Decorator implementing a class-level read-only property"""
+
+    def __init__(self, method: Callable):
+        self.getter = method
+        self.__doc__ = method.__doc__
+
+    def __get__(self, instance, owner=None):
+        return self.getter(owner or type(instance))
