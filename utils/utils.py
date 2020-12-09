@@ -3,8 +3,10 @@ from __future__ import annotations
 import re
 from contextlib import nullcontext
 from itertools import islice, repeat
+from operator import attrgetter
 from subprocess import run
-from typing import Any, Callable, Iterable, Iterator, Type
+from typing import NamedTuple, TypeVar
+from typing import Any, Callable, Iterable, Iterator, Type, List, Optional, Collection, Literal, Union
 
 from wrapt import decorator
 
@@ -16,7 +18,7 @@ from wrapt import decorator
 __all__ = [
     'test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'schain', 'isdunder', 'issunder', 'isiterable',
     'typename', 'spy', 'Disposable', 'getter', 'setter', 'legacy', 'stack', 'Dummy', 'null', 'clipboard',
-    'ignore', 'classproperty',
+    'ignore', 'classproperty', 'Tree',
 ]
 
 
@@ -494,3 +496,87 @@ class classproperty:
 
     def __get__(self, instance, owner=None):
         return self.getter(owner or type(instance))
+
+
+class Tree:
+    """
+    Convert a collection of objects with cross-links into a tree structure
+    Intended to be used mainly for display purposes
+    Raises: RecursionError
+    >>> tree = Tree.get(root=..., naming=str, expahsion='children')
+    >>> tree_from_nodes = Tree.build(nodes=..., parent='parent')
+    >>> assert str(tree) == tree.render()
+    >>> tree.render()
+    Root_item
+    ├── 1st child
+    │   └── subchild
+    ├── 2nd child
+    └── ...
+    """
+
+    Item = TypeVar('Item')
+    NameHandle = Callable[[Item], str]
+    ParentHandle = Callable[[Item], Item]
+    ChildrenHandle = Callable[[Item], Collection[Item]]
+
+    class Node(NamedTuple):
+        name: str
+        value: Tree.Item
+        parent: Optional[Tree.Node]
+        nodes: List[Tree.Node]
+
+    # line, fork, end, void
+    marker_styles = dict(
+        strict = ('│   ', '├── ', '└── ', '    '),
+        smooth = ('│   ', '├── ', '╰── ', '    '),
+        indent  = ('    ',) * 4,
+    )
+
+    def __init__(self, root: Node):
+        self.root = root
+
+    def __str__(self):
+        return self.render()
+
+    def render(self, style: Literal['strict', 'smooth', 'empty'] = 'strict', empty: str = '<Empty tree>'):
+        if style not in self.marker_styles.keys():
+            styles = ', '.join(self.marker_styles.keys())
+            raise ValueError(f"invalid style: expected [{styles}], got {style!r}")
+
+        if not self.root:
+            return empty
+
+        line, fork, end, void = self.marker_styles[style]
+
+        def generate(nodes: List[Tree.Node], prefix: str = ''):
+            last = len(nodes)-1
+            for i, item in enumerate(nodes):
+                yield f'{prefix}{end if i is last else fork}{item.name}'
+                if item.nodes:
+                    yield from generate(item.nodes, prefix+(void if i is last else line))
+
+        return '\n'.join(schain(self.root.name, generate(self.root.nodes)))
+
+    @classmethod
+    def get(cls, root: Item, naming: Union[str, NameHandle], expansion: Union[str, ChildrenHandle]) -> Tree:
+        """Build the tree top-down starting from root and following children"""
+
+        def get_children(node: cls.Item) -> List[cls.Node]:
+            children = children_handle(node)
+            if children is None:
+                return []
+            if not isinstance(children, Collection):
+                err_msg = f'children handle returned invalid result: expected List[Item], got {children!r}'
+                raise RuntimeError(err_msg)
+            return [cls.Node(name=name_handle(child), value=child, parent=node, nodes=get_children(child))
+                    for child in children]
+
+        children_handle = attrgetter(expansion) if isinstance(expansion, str) else expansion
+        name_handle = attrgetter(naming) if isinstance(naming, str) else naming
+
+        return cls(cls.Node(name=name_handle(root), value=root, parent=None, nodes=get_children(root)))
+
+    @classmethod
+    def build(cls, nodes: Collection[Item], parent: Union[str, ParentHandle] = None) -> Tree:
+        """Build the tree out of pile of items bottom-up following parents"""
+        return NotImplemented

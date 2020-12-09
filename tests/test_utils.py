@@ -7,7 +7,7 @@ from typing import NamedTuple, Iterator, Iterable, List, Callable, Dict
 
 from pytest import fixture, mark, raises, warns, param
 
-from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, typename
+from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, typename, Tree
 
 
 class TestBytewise:
@@ -320,3 +320,111 @@ class TestSpy:
             spy_object.__next__()
         with raises(StopIteration):
             lookahead.__next__()
+
+
+class TestTree:
+
+    class Item:
+        def __init__(self, name, children):
+            self.name = name
+            self.children = children
+            self.invalid = 0
+
+        def __str__(self):
+            return self.name
+
+        def get_children(self):
+            return self.children
+
+        @property
+        def get_name(self):
+            return self.name
+
+    @fixture(scope='class', params=['children', Item.get_children],
+             ids=['nodes=str', 'nodes=func'])
+    def children_handle(self, request):
+        return request.param
+
+    @fixture(scope='class', params=['name', lambda item: item.name, 'get_name', str],
+             ids=['name=str', 'name=func', 'name=prop', 'name=str'])
+    def name_handle(self, request):
+        return request.param
+
+    @fixture(scope='class', params=['strict', 'smooth', 'indent'])
+    def render_style(self, request):
+        return request.param
+
+    @fixture(scope='class')
+    def root_item(self):
+        c = self.Item('c', None)
+        a = self.Item('a', None)
+        b = self.Item('b', [c])
+        d = self.Item('d', None)
+        e = self.Item('e', [a, b, d])
+        f = self.Item('f', [e])
+        return f
+
+    @fixture(scope='class')
+    def testcase_linked_tree(self, name_handle, children_handle, render_style, root_item):
+        rendered = {
+            'strict': '''
+                f
+                └── e
+                    ├── a
+                    ├── b
+                    │   └── c
+                    └── d
+                ''',
+            'smooth': '''
+                f
+                ╰── e
+                    ├── a
+                    ├── b
+                    │   ╰── c
+                    ╰── d
+                ''',
+            'indent': '''
+                f
+                    e
+                        a
+                        b
+                            c
+                        d
+                ''',
+        }
+
+        result = '\n'.join(line[4*4:] for line in rendered[render_style].splitlines() if line.strip())
+        return Tree.get(root_item, name_handle, children_handle), result, render_style
+
+    @fixture(scope='class', params=['<Empty tree>', ''], ids=['empty=default', 'empty=none'])
+    def testcase_empty(self, request):
+        result = request.param
+        return Tree(None), result, request.param
+
+    @fixture(scope='class')
+    def testcase_single_item(self, name_handle, children_handle):
+        item = self.Item('item', None)
+        return Tree.get(item, name_handle, children_handle), 'item'
+
+    def test_linked_tree(self, testcase_linked_tree):
+        tree, rendered, style = testcase_linked_tree
+        assert tree.render(style) == rendered
+
+    def test_single_item_tree(self, testcase_single_item):
+        tree, rendered = testcase_single_item
+        assert str(tree) == rendered
+
+    def test_empty_tree(self, testcase_empty):
+        tree, rendered, empty_arg = testcase_empty
+        assert tree.render(empty=empty_arg) == rendered
+
+    def test_invalid_style(self, testcase_linked_tree):
+        tree, rendered, style = testcase_linked_tree
+        with raises(ValueError, match=r"invalid style: expected \[.*\], got 'wrong'"):
+            tree.render('wrong')
+
+    @mark.parametrize('children_handle', ['invalid'], indirect=True)
+    def test_invalid_children_handle(self, name_handle, children_handle, root_item):
+        err_msg = r"children handle returned invalid result: expected List\[Item\], got 0"
+        with raises(RuntimeError, match=err_msg):
+            Tree.get(root_item, name_handle, children_handle)
