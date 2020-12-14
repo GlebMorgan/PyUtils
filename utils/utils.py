@@ -5,8 +5,8 @@ from contextlib import nullcontext
 from itertools import islice, repeat
 from operator import attrgetter
 from subprocess import run
-from typing import NamedTuple, TypeVar
-from typing import Any, Callable, Iterable, Iterator, Type, List, Optional, Collection, Literal, Union
+from typing import NamedTuple, TypeVar, Dict, Tuple
+from typing import Any, Callable, Iterable, Iterator, Type, List, Collection, Literal, Union
 
 from wrapt import decorator
 
@@ -500,18 +500,23 @@ class classproperty:
 
 class Tree:
     """
-    Convert a collection of objects with cross-links into a tree structure
+    Tree structure converter and tree-style renderer
     Intended to be used mainly for display purposes
-    Raises: RecursionError
-    >>> tree = Tree.get(root=..., naming=str, expahsion='children')
-    >>> tree_from_nodes = Tree.build(nodes=..., parent='parent')
+    Does not handle cycle references for now
+    >>> exceptions = [...]  # list of all python exceptions
+    >>> tree = Tree.build(items=exceptions, naming='__name__', parents='__base__')
     >>> assert str(tree) == tree.render()
     >>> tree.render()
-    Root_item
-    ├── 1st child
-    │   └── subchild
-    ├── 2nd child
-    └── ...
+    object
+    └── BaseException
+        ├── Exception
+        │   ├── ArithmeticError
+        │   │   ├── FloatingPointError
+        │   │   ├── OverflowError
+        │   │   └── ZeroDivisionError
+        │   ├── AssertionError
+        │   ├── AttributeError
+        ...
     """
 
     Item = TypeVar('Item')
@@ -520,17 +525,16 @@ class Tree:
     ChildrenHandle = Callable[[Item], Collection[Item]]
 
     class Node(NamedTuple):
-        name: str
-        value: Tree.Item
-        parent: Optional[Tree.Node]
-        nodes: List[Tree.Node]
+        name: str  # string used for node representation when rendering a tree
+        value: Tree.Item  # actual item, aka tree node payload
+        nodes: List[Tree.Node]  # list of children nodes
 
-    # line, fork, end, void
-    marker_styles = dict(
-        strict = ('│   ', '├── ', '└── ', '    '),
-        smooth = ('│   ', '├── ', '╰── ', '    '),
-        indent  = ('    ',) * 4,
-    )
+    # Dict[stylename: (line, fork, end, void)]
+    marker_styles: Dict[str, Tuple[str, str, str, str]] = {
+        'strict': ('│   ', '├── ', '└── ', '    '),
+        'smooth': ('│   ', '├── ', '╰── ', '    '),
+        'indent': ('    ',) * 4,
+    }
 
     def __init__(self, root: Node):
         self.root = root
@@ -539,6 +543,12 @@ class Tree:
         return self.render()
 
     def render(self, style: Literal['strict', 'smooth', 'empty'] = 'strict', empty: str = '<Empty tree>'):
+        """
+        Create tree-like visual representation string
+        Strings used for visualising tree branches are determined by 'style' argument
+        Empty tree representation is specified by 'empty' argument
+        """
+
         if style not in self.marker_styles.keys():
             styles = ', '.join(self.marker_styles.keys())
             raise ValueError(f"invalid style: expected [{styles}], got {style!r}")
@@ -558,25 +568,69 @@ class Tree:
         return '\n'.join(schain(self.root.name, generate(self.root.nodes)))
 
     @classmethod
-    def get(cls, root: Item, naming: Union[str, NameHandle], expansion: Union[str, ChildrenHandle]) -> Tree:
-        """Build the tree top-down starting from root and following children"""
+    def convert(cls, root: Item, naming: Union[str, NameHandle], children: Union[str, ChildrenHandle]) -> Tree:
+        """
+        Build the tree starting from given root item top-down following references to child nodes
+        The name for each generated node is determined by 'naming' argument, which can be:
+            • string – defines the name of an item's attribute, so that `node.name = item.<name>`
+            • callable – defines a callable of a single argument, so that `node.name = <callable>(item)`
+        Similarly, 'children' argument defines a handle for acquiring a list of item's children.
+            It could be whether a item's attribute name or a single-argument callable hook
+        """
 
         def get_children(node: cls.Item) -> List[cls.Node]:
-            children = children_handle(node)
-            if children is None:
+            children_nodes = children_handle(node)
+            if children_nodes is None:
                 return []
-            if not isinstance(children, Collection):
-                err_msg = f'children handle returned invalid result: expected List[Item], got {children!r}'
+            if not isinstance(children_nodes, Collection):
+                err_msg = f'children handle returned invalid result: expected List[Item], got {children_nodes!r}'
                 raise RuntimeError(err_msg)
-            return [cls.Node(name=name_handle(child), value=child, parent=node, nodes=get_children(child))
-                    for child in children]
+            return [cls.Node(name=name_handle(child), value=child, nodes=get_children(child))
+                    for child in children_nodes]
 
-        children_handle = attrgetter(expansion) if isinstance(expansion, str) else expansion
+        children_handle = attrgetter(children) if isinstance(children, str) else children
         name_handle = attrgetter(naming) if isinstance(naming, str) else naming
 
-        return cls(cls.Node(name=name_handle(root), value=root, parent=None, nodes=get_children(root)))
+        return cls(cls.Node(name=name_handle(root), value=root, nodes=get_children(root)))
 
     @classmethod
-    def build(cls, nodes: Collection[Item], parent: Union[str, ParentHandle] = None) -> Tree:
-        """Build the tree out of pile of items bottom-up following parents"""
-        return NotImplemented
+    def build(cls, items: Iterable[Item], naming: Union[str, NameHandle],
+              parent: Union[str, ParentHandle] = None) -> Tree:
+        """
+        Build the tree out of collection of items bottom-up following references to parent nodes
+        Arguments `naming` and `parents` semantics is similar to correspondent arguments of `.convert()` method
+        Elements of `items` collection should be hashable
+        """
+
+        parent_handle = attrgetter(parent) if isinstance(parent, str) else parent
+        name_handle = attrgetter(naming) if isinstance(naming, str) else naming
+
+        nodes_index = {}
+        root = None
+        for item in items:
+            if item in nodes_index:
+                continue
+            node = cls.Node(name=name_handle(item), value=item, nodes=[])
+            nodes_index[item] = node
+            parent_item = parent_handle(item)
+            while parent_item not in nodes_index:
+                if parent_item is None:
+                    if root is None:
+                        root = node
+                        break
+                    else:
+                        err_msg = f"Given collection of items is not a connected graph! " \
+                                  f"Both {root.value!r} and {parent_item!r} nodes does not have a parent"
+                        raise RuntimeError(err_msg)
+                parent_node = cls.Node(name=name_handle(parent_item), value=parent_item, nodes=[node])
+                nodes_index[parent_item] = parent_node
+                node = parent_node
+                parent_item = parent_handle(parent_item)
+
+            if parent_item:
+                nodes_index[parent_item].nodes.append(node)
+
+        for node in nodes_index.values():
+            node.nodes.sort(key=attrgetter('name'))
+
+        return cls(root)

@@ -1,4 +1,4 @@
-import string
+from string import printable
 from inspect import signature
 from itertools import islice
 from operator import itemgetter
@@ -232,7 +232,7 @@ class TestSpy:
         'tuple':      lambda n: tuple(range(n)),
         'dict':       lambda n: {str(i): i for i in range(n)},
         'dict.items': lambda n: {str(i): i for i in range(n)}.items(),
-        'str':        lambda n: string.printable[:n],
+        'str':        lambda n: printable[:n],
     }
 
     @staticmethod
@@ -325,9 +325,10 @@ class TestSpy:
 class TestTree:
 
     class Item:
-        def __init__(self, name, children):
+        def __init__(self, name, children=None, parent=None):
             self.name = name
-            self.children = children
+            self.children = children or []
+            self.parent = parent
             self.invalid = 0
 
         def __str__(self):
@@ -339,6 +340,12 @@ class TestTree:
         @property
         def get_name(self):
             return self.name
+
+    @staticmethod
+    def strip_indents(string: str, n: int):
+        return '\n'.join(line[4 * n:] for line in string.splitlines() if line.strip())
+
+# ————————————————————————————————————————————————————— Fixtures ————————————————————————————————————————————————————— #
 
     @fixture(scope='class', params=['children', Item.get_children],
              ids=['nodes=str', 'nodes=func'])
@@ -354,8 +361,17 @@ class TestTree:
     def render_style(self, request):
         return request.param
 
+    @fixture(scope='class', params=['<Empty tree>', ''], ids=['empty=default', 'empty=none'])
+    def empty_arg(self, request):
+        return request.param
+
+    @fixture(scope='class', params=['normal', 'reversed', 'top-down', 'bottom-up', 'random'])
+    def items_order(self, request):
+        return request.param
+
     @fixture(scope='class')
     def root_item(self):
+        """Root item with children references, entailing all child nodes"""
         c = self.Item('c', None)
         a = self.Item('a', None)
         b = self.Item('b', [c])
@@ -365,8 +381,10 @@ class TestTree:
         return f
 
     @fixture(scope='class')
-    def testcase_linked_tree(self, name_handle, children_handle, render_style, root_item):
-        rendered = {
+    def testcase_simple_tree(self, name_handle, children_handle, render_style, root_item):
+        """Tree with children references: (Tree() object, tree representation string, render style used)"""
+
+        representation = {
             'strict': '''
                 f
                 └── e
@@ -393,33 +411,251 @@ class TestTree:
                 ''',
         }
 
-        result = '\n'.join(line[4*4:] for line in rendered[render_style].splitlines() if line.strip())
-        return Tree.get(root_item, name_handle, children_handle), result, render_style
-
-    @fixture(scope='class', params=['<Empty tree>', ''], ids=['empty=default', 'empty=none'])
-    def testcase_empty(self, request):
-        result = request.param
-        return Tree(None), result, request.param
+        tree = Tree.convert(root_item, name_handle, children_handle)
+        return tree, self.strip_indents(representation[render_style], 4), render_style
 
     @fixture(scope='class')
-    def testcase_single_item(self, name_handle, children_handle):
-        item = self.Item('item', None)
-        return Tree.get(item, name_handle, children_handle), 'item'
+    def testcase_empty_tree(self, empty_arg):
+        """Tree with an empty root: (Tree() object, empty tree representation string, 'empty' argument)"""
+        result = empty_arg
+        return Tree(None), result, empty_arg
 
-    def test_linked_tree(self, testcase_linked_tree):
-        tree, rendered, style = testcase_linked_tree
+    @fixture(scope='class')
+    def testcase_single_item_tree(self, name_handle, children_handle):
+        """Tree of with 1 single node: (Tree() object, rendered tree string)"""
+        item = self.Item('item', None)
+        return Tree.convert(item, name_handle, children_handle), 'item'
+
+    @fixture(scope='class')
+    def testcase_tree_items(self, items_order):
+        """Items with parent references: (list of items, rendered tree string)"""
+
+        from random import sample
+        from re import findall
+
+        representation = '''
+            Item01_level0
+            ├── Item02_level1
+            ├── Item03_level1
+            │   └── Item04_level2
+            │       └── Item05_level3
+            │           └── Item06_level4
+            ├── Item07_level1
+            │   ├── Item08_level2
+            │   │   ├── Item09_level3
+            │   │   └── Item10_level3
+            │   └── Item11_level2
+            │       ├── Item12_level3
+            │       └── Item13_level3
+            └── Item14_level1
+                ├── Item15_level2
+                └── Item16_level2
+                    ├── Item17_level3
+                    └── Item18_level3
+                        ├── Item19_level4
+                        └── Item20_level4
+        '''
+
+        tree_orders = {
+            'normal': range(20),
+            'reversed': reversed(range(20)),
+            'top-down': [0, 1, 2, 6, 13, 3, 7, 10, 14, 15, 4, 8, 9, 11, 12, 16, 17, 5, 18, 19],
+            'bottom-up': reversed([0, 1, 2, 6, 13, 3, 7, 10, 14, 15, 4, 8, 9, 11, 12, 16, 17, 5, 18, 19]),
+            'random': sample(list(range(20)), 20),
+        }
+
+        # Create items taking names from representation
+        item_names = findall(r'Item\d*_level\d*', representation)
+        items = [self.Item(name) for name in item_names]
+
+        # Create links to parents
+        items[1].parent = items[0]
+        items[2].parent = items[0]
+        items[3].parent = items[2]
+        items[4].parent = items[3]
+        items[5].parent = items[4]
+        items[6].parent = items[0]
+        items[7].parent = items[6]
+        items[8].parent = items[7]
+        items[9].parent = items[7]
+        items[10].parent = items[6]
+        items[11].parent = items[10]
+        items[12].parent = items[10]
+        items[13].parent = items[0]
+        items[14].parent = items[13]
+        items[15].parent = items[13]
+        items[16].parent = items[15]
+        items[17].parent = items[15]
+        items[18].parent = items[17]
+        items[19].parent = items[17]
+
+        # Reorder items
+        items = [items[i] for i in tree_orders[items_order]]
+
+        return items, self.strip_indents(representation, 3)
+
+    @fixture(scope='class')
+    def testcase_exception_tree_items(self):
+        import builtins
+
+        representation = '''
+            object
+            └── BaseException
+                ├── Exception
+                │   ├── ArithmeticError
+                │   │   ├── FloatingPointError
+                │   │   ├── OverflowError
+                │   │   └── ZeroDivisionError
+                │   ├── AssertionError
+                │   ├── AttributeError
+                │   ├── BufferError
+                │   ├── EOFError
+                │   ├── ImportError
+                │   │   └── ModuleNotFoundError
+                │   ├── LookupError
+                │   │   ├── IndexError
+                │   │   └── KeyError
+                │   ├── MemoryError
+                │   ├── NameError
+                │   │   └── UnboundLocalError
+                │   ├── OSError
+                │   │   ├── BlockingIOError
+                │   │   ├── ChildProcessError
+                │   │   ├── ConnectionError
+                │   │   │   ├── BrokenPipeError
+                │   │   │   ├── ConnectionAbortedError
+                │   │   │   ├── ConnectionRefusedError
+                │   │   │   └── ConnectionResetError
+                │   │   ├── FileExistsError
+                │   │   ├── FileNotFoundError
+                │   │   ├── InterruptedError
+                │   │   ├── IsADirectoryError
+                │   │   ├── NotADirectoryError
+                │   │   ├── PermissionError
+                │   │   ├── ProcessLookupError
+                │   │   └── TimeoutError
+                │   ├── ReferenceError
+                │   ├── RuntimeError
+                │   │   ├── NotImplementedError
+                │   │   └── RecursionError
+                │   ├── StopAsyncIteration
+                │   ├── StopIteration
+                │   ├── SyntaxError
+                │   │   └── IndentationError
+                │   │       └── TabError
+                │   ├── SystemError
+                │   ├── TypeError
+                │   ├── ValueError
+                │   │   └── UnicodeError
+                │   │       ├── UnicodeDecodeError
+                │   │       ├── UnicodeEncodeError
+                │   │       └── UnicodeTranslateError
+                │   └── Warning
+                │       ├── BytesWarning
+                │       ├── DeprecationWarning
+                │       ├── FutureWarning
+                │       ├── ImportWarning
+                │       ├── PendingDeprecationWarning
+                │       ├── ResourceWarning
+                │       ├── RuntimeWarning
+                │       ├── SyntaxWarning
+                │       ├── UnicodeWarning
+                │       └── UserWarning
+                ├── GeneratorExit
+                ├── KeyboardInterrupt
+                └── SystemExit
+        '''
+
+        isexception = lambda item: isinstance(item, type) and issubclass(item, BaseException)
+        exceptions = [item for item in vars(builtins).values() if isexception(item)]
+        rendered = '\n'.join(line[4 * 3:] for line in representation.splitlines() if line.strip())
+        return exceptions, rendered
+
+    @fixture(scope='class')
+    def testcase_empty_tree_items(self, empty_arg):
+        """Empty collection of items: (empty list, empty tree representation string)"""
+        return [], empty_arg
+
+    @fixture(scope='class')
+    def testcase_single_item_tree_items(self):
+        """Single item with parent reference: (list of 1 item, tree representation string)"""
+        return [self.Item('single', parent=None)], 'single'
+
+    @fixture(scope='class')
+    def testcase_star_layout_tree_items(self):
+        """Items with back references to a single root item: (list of items, tree representation string)"""
+        representation = '''
+            root
+            ├── item1
+            ├── item2
+            ├── item3
+            ├── item4
+            └── item5
+        '''
+        root = self.Item('root')
+        children = [self.Item(f'item{i}', parent=root) for i in range(1, 6)]
+        return [root, *children], self.strip_indents(representation, 3)
+
+    @fixture(scope='class')
+    def testcase_chain_layout_tree_items(self):
+        """Items linked together like backreference queue: (list of items, tree representation string)"""
+        representation = '''
+            item0
+            └── item1
+                └── item2
+                    └── item3
+                        └── item4
+                            └── item5
+        '''
+        items = [self.Item(f'item{i}') for i in range(6)]
+        for i in range(1, 6):
+            items[i].parent = items[i-1]
+
+        return items, self.strip_indents(representation, 3)
+
+    @fixture(scope='class', params=[(0,), (0, 2, 3, 4), (3, 7, 10, 15)], ids=['root', 'branch', 'level2'])
+    def testcase_missing_tree_items(self, request, testcase_tree_items):
+        """Items with parent references with some parent items missing: (list of items, tree representation string"""
+        items, representation = testcase_tree_items
+        filtered_items = [items[i] for i in range(len(items)) if i not in request.param]
+        return filtered_items, representation
+
+    @fixture(scope='class')
+    def testcase_multiple_roots_tree_items(self, testcase_tree_items):
+        """Items with cycle references: list of items"""
+        items, representation = testcase_tree_items
+        second_root = self.Item('item21_2nd_root')
+        child = self.Item('item22_2nd_root', parent=second_root)
+        separate_branch_items = [second_root, child]
+        return separate_branch_items + items
+
+    @fixture(scope='class')
+    def testcase_cycle_references_tree_items(self, testcase_exception_tree_items):
+        """Items with cycle references: list of items"""
+        items, representation = testcase_exception_tree_items
+        # ▼ evil modification - now 'items' should no longer constitute a tree structure
+        items[0].parent = items[50]
+        return items
+
+# —————————————————————————————————————————————————————— Tests ——————————————————————————————————————————————————————— #
+
+    def test_render_linked(self, testcase_simple_tree):
+        tree, rendered, style = testcase_simple_tree
+        print('', tree.render(style), sep='\n')
         assert tree.render(style) == rendered
 
-    def test_single_item_tree(self, testcase_single_item):
-        tree, rendered = testcase_single_item
+    def test_render_single_item(self, testcase_single_item_tree):
+        tree, rendered = testcase_single_item_tree
+        print('', tree, sep='\n')
         assert str(tree) == rendered
 
-    def test_empty_tree(self, testcase_empty):
-        tree, rendered, empty_arg = testcase_empty
+    def test_render_empty(self, testcase_empty_tree):
+        tree, rendered, empty_arg = testcase_empty_tree
+        print('', tree.render(empty=empty_arg), sep='\n')
         assert tree.render(empty=empty_arg) == rendered
 
-    def test_invalid_style(self, testcase_linked_tree):
-        tree, rendered, style = testcase_linked_tree
+    def test_render_invalid_style(self, testcase_simple_tree):
+        tree, rendered, style = testcase_simple_tree
         with raises(ValueError, match=r"invalid style: expected \[.*\], got 'wrong'"):
             tree.render('wrong')
 
@@ -427,4 +663,60 @@ class TestTree:
     def test_invalid_children_handle(self, name_handle, children_handle, root_item):
         err_msg = r"children handle returned invalid result: expected List\[Item\], got 0"
         with raises(RuntimeError, match=err_msg):
-            Tree.get(root_item, name_handle, children_handle)
+            Tree.convert(root_item, name_handle, children_handle)
+
+    def test_build_exceptions(self, testcase_exception_tree_items):
+        items, rendered = testcase_exception_tree_items
+        tree = Tree.build(items=items, naming='__name__', parent='__base__')
+        print('', tree, sep='\n')
+        assert tree.render() == rendered
+
+    def test_build(self, testcase_tree_items):
+        items, rendered = testcase_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree, sep='\n')
+        assert tree.render() == rendered
+
+    def test_build_empty(self, testcase_empty_tree_items):
+        items, rendered = testcase_empty_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree.render(empty=rendered), sep='\n')
+        assert tree.render(empty=rendered) == rendered
+
+    def test_build_single_item(self, testcase_single_item_tree_items):
+        items, rendered = testcase_single_item_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree, sep='\n')
+        assert tree.render() == rendered
+
+    def test_build_star_layout(self, testcase_star_layout_tree_items):
+        items, rendered = testcase_star_layout_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree, sep='\n')
+        assert tree.render() == rendered
+
+    def test_build_chain_layout(self, testcase_chain_layout_tree_items):
+        items, rendered = testcase_chain_layout_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree, sep='\n')
+        assert tree.render() == rendered
+
+    @mark.parametrize('items_order', ['normal'], indirect=True)
+    def test_build_missing_non_leaves_items(self, testcase_missing_tree_items, items_order):
+        items, rendered = testcase_missing_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree, sep='\n')
+        assert tree.render() == rendered
+
+    def test_build_multiple_roots(self, testcase_multiple_roots_tree_items):
+        items = testcase_multiple_roots_tree_items
+        with raises(RuntimeError, match='Given collection of items is not a connected graph!'):
+            Tree.build(items, 'name', 'parent')
+
+    @mark.xfail(reason='cycle references handling is not implemented')
+    def test_build_cycle_references(self, testcase_cycle_references_tree_items):
+        items = testcase_cycle_references_tree_items
+        tree = Tree.build(items, 'name', 'parent')
+        print('', tree, sep='\n')
+        with raises(RecursionError):
+            tree.render()
