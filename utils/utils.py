@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 from contextlib import nullcontext
-from itertools import islice, repeat
+from enum import Enum
+from itertools import islice, repeat, zip_longest
 from operator import attrgetter
 from subprocess import run
 from typing import NamedTuple, TypeVar, Dict, Tuple
@@ -18,7 +19,7 @@ from wrapt import decorator
 __all__ = [
     'test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'schain', 'isdunder', 'issunder', 'isiterable',
     'typename', 'spy', 'Disposable', 'getter', 'setter', 'legacy', 'stack', 'Dummy', 'null', 'clipboard',
-    'ignore', 'classproperty', 'Tree',
+    'ignore', 'classproperty', 'Tree', 'AttrEnum',
 ]
 
 
@@ -634,3 +635,104 @@ class Tree:
             node.nodes.sort(key=attrgetter('name'))
 
         return cls(root)
+
+
+class AttrEnum(Enum):
+    """
+    Enum with custom attributes + an automatic `.index` attribute
+    `AttrEnum` attributes are declared by assigning desired names to special `__fields__` variable
+        on the very first line of enum class body (somewhat similar to Python `__slots__`)
+    Attribute values are set by assigning each `AttrEnum` member with a tuple of values,
+        that correspond to specified `__fields__`; missing values fallback to `None`
+    Attribute `.index` is set automatically and defaults to enum member index number within order of declaration
+    Both `.value` and `.index` attributes may be overridden by providing their names in `__fields__`
+    If `__fields__` tuple is not specified, only `.index` attribute is added to enum member implicitly;
+        besides that the class would generally behave like conventional `Enum`
+
+    >>> class Sample(AttrEnum):
+    ...     __fields__ = 'attr1', 'attr2', 'attr3'
+    ...     A = 'data_A', 10, True
+    ...     B = 'data_B', 42
+    ...     C = 'data_C', 77
+    ...
+    >>> member = Sample.B
+    >>> assert member.name == 'B'
+    >>> assert member.index == 1  # counts from 0 in order of declaration
+    >>> assert member.value == ('data_B', 42, None)  # values are filled up to match __fields__
+    >>> assert member.attr1 == 'data_B'
+    >>> assert member.attr2 == 42
+    >>> assert member.attr3 is None  # if attr is not specified, it defaults to None
+    >>> assert repr(member) == "<Sample.B: attr1='data_B', attr2=42, attr3=None>"
+
+    >>> class ValueSample(AttrEnum):
+    ...     __fields__ = 'index', 'value'
+    ...     A = 1, 'data_A'
+    ...     B = 3, 'data_B'
+    ...     C = 2, 'data_C'
+    ...
+    >>> member = ValueSample.B
+    >>> assert member.name == 'B'
+    >>> assert member.index == 3  # index is overridden
+    >>> assert member.value == 'data_B'  # value is overridden as well
+    >>> assert repr(member) == "<ValueSample.B: index=3, value='data_B'>"  # repr keeps unified format
+
+    >>> class VoidSample(AttrEnum):
+    ...     A = 2
+    ...     B = 7
+    ...     C = 9
+    ...
+    >>> member = VoidSample.B
+    >>> assert member.name == 'B'
+    >>> assert member.index == 1  # .index defaults to enum member index number
+    >>> assert member.value == 7  # .value defaults to whatever member is assigned to
+    >>> assert repr(member) == "<VoidSample.B: 7>"
+    """
+
+    # CONSIDER: support single string __fields__
+
+    __fields__: tuple = ()
+
+    def __new__(cls, *args):
+        obj = object.__new__(cls)
+
+        # If __fields__ are not provided, just set .index
+        #   and leave .value to be defined by Enum internals
+        if not cls.__fields__:
+            obj.index = len(cls.__members__)
+            return obj
+
+        # Deny reserved names
+        # (this check is performed redundantly during creation of each enum member,
+        #   but adding a custom metaclass for performing it just once does not seem like a wonderful idea)
+        for name in cls.__fields__:
+            if name.startswith('_') or name.endswith('_') or name == 'name':
+                raise ValueError(f"invalid field name '{name}'")
+
+        # Freak out if specified member attrs exceed number of fields
+        if len(args) > len(cls.__fields__):
+            err_msg = "enum member has too many attrs: expected {n_fields}, got {n_args}"
+            raise ValueError(err_msg.format(n_fields=len(cls.__fields__), n_args=len(args)))
+
+        # Assign .value and .index with values from attrs, or defaults if not provided
+        attrs: dict = dict(zip_longest(cls.__fields__, args))
+        obj._value_ = attrs.pop('value', tuple(attrs.values()) if len(attrs) > 1 else args[0])
+        obj.index = attrs.pop('index', len(cls.__members__))
+
+        # Set specified attrs
+        obj.__dict__.update(attrs)
+
+        return obj
+
+    def __repr__(self):
+        if self.__fields__:
+            attrs = ', '.join(f'{attr}={getattr(self, attr)!r}' for attr in self.__fields__)
+        else:
+            attrs = repr(self._value_)
+        return f'<{self.__class__.__name__}.{self._name_}: {attrs}>'
+
+    def __str__(self):
+        return f'{self.__class__.__name__}.{self._name_}'
+
+    def __dir__(self):
+        fields = (name for name in self.__fields__ if name not in ('index', 'value'))
+        return *super().__dir__(), '__fields__', 'index', *fields

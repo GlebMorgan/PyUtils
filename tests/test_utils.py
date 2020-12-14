@@ -6,8 +6,9 @@ from random import choices
 from typing import NamedTuple, Iterator, Iterable, List, Callable, Dict
 
 from pytest import fixture, mark, raises, warns, param
+from pytest import lazy_fixture
 
-from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, typename, Tree
+from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, typename, Tree, AttrEnum
 
 
 class TestBytewise:
@@ -720,3 +721,299 @@ class TestTree:
         print('', tree, sep='\n')
         with raises(RecursionError):
             tree.render()
+
+
+class TestAttrEnum:
+    """
+    Structure of dicts returned by most testcase fixtures:
+        enum: AttrEnum = enum class under the test
+        fields: list   = list of all field names declared in __fields__
+        members: list  = list of all enum members
+        string: str    = str(last_enum_member)
+        representation: str = repr(last_enum_member)
+        contents: list = contents of dir(last_enum_member)
+        index          = last_enum_member.index
+        value          = last_enum_member.value
+        attrs: dict    = mapping of all declared field names
+                         on their corresponding values of last_enum_member.
+    """
+
+    common_enum_dunders = ['__class__', '__doc__', '__fields__', '__module__']
+
+    @staticmethod
+    def gen_ids(lazy_fixture):
+        return lazy_fixture.name.replace('testcase_enum_', '', 1)
+
+# ————————————————————————————————————————————————————— Fixtures ————————————————————————————————————————————————————— #
+
+    @fixture(scope='class')
+    def testcase_doc_sample(self):
+        class Sample(AttrEnum):
+            __fields__ = 'attr1', 'attr2', 'attr3'
+            A = 'data_A', 10, True
+            B = 'data_B', 42
+            C = 'data_C', 77
+        return Sample
+
+    @fixture(scope='class')
+    def testcase_doc_value_sample(self):
+        class ValueSample(AttrEnum):
+            __fields__ = 'index', 'value'
+            A = 1, 'data_A'
+            B = 3, 'data_B'
+            C = 2, 'data_C'
+        return ValueSample
+
+    @fixture(scope='class')
+    def testcase_doc_void_sample(self):
+        class VoidSample(AttrEnum):
+            A = 2
+            B = 7
+            C = 9
+        return VoidSample
+
+    @fixture(scope='class')
+    def testcase_enum_0f(self):
+        class Enum0(AttrEnum):
+            A = 'A_attr'
+            B = 'B_attr'
+            C = 'C_attr'
+
+        return dict(
+                enum     = Enum0,
+                fields   = [],
+                members  = [Enum0.A, Enum0.B, Enum0.C],
+                string   = 'Enum0.C',
+                representation = "<Enum0.C: 'C_attr'>",
+                contents = [*self.common_enum_dunders, 'index', 'name', 'value'],
+                index    = 2,
+                value    = 'C_attr',
+                attrs    = {},
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_1f(self):
+        class Enum1(AttrEnum):
+            __fields__ = 'f1',
+            A = 'A_attr_1'
+            B = 'B_attr_1'
+            C = 'C_attr_1'
+
+        return dict(
+                enum     = Enum1,
+                fields   = ['f1'],
+                members  = [Enum1.A, Enum1.B, Enum1.C],
+                string   = 'Enum1.C',
+                representation = "<Enum1.C: f1='C_attr_1'>",
+                contents = [*self.common_enum_dunders, 'f1', 'index', 'name', 'value'],
+                index    = 2,
+                value    = 'C_attr_1',
+                attrs    = {'f1': 'C_attr_1'},
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_2f(self):
+        class Enum2(AttrEnum):
+            __fields__ = 'f1', 'f2'
+            A = 'A_attr_1', 'A_attr_2'
+            B = 'B_attr_1', 'B_attr_2'
+            C = 'C_attr_1', 'C_attr_2'
+
+        return dict(
+                enum     = Enum2,
+                fields   = ['f1', 'f2'],
+                members  = [Enum2.A, Enum2.B, Enum2.C],
+                string   = 'Enum2.C',
+                representation = "<Enum2.C: f1='C_attr_1', f2='C_attr_2'>",
+                contents = [*self.common_enum_dunders, 'f1', 'f2', 'index', 'name', 'value'],
+                index    = 2,
+                value    = ('C_attr_1', 'C_attr_2'),
+                attrs    = {'f1': 'C_attr_1', 'f2': 'C_attr_2'},
+        )
+
+    enum_testcases = ['testcase_enum_0f', 'testcase_enum_1f', 'testcase_enum_2f']
+
+    @fixture(scope='class', params=(lazy_fixture(case) for case in enum_testcases), ids=gen_ids.__func__)
+    def testcase_enum_1_member(self, request):
+        case = request.param
+
+        class SingleEnum(AttrEnum):
+            __fields__ = tuple(case['fields'])
+            C = case['enum'].C.value
+
+        return dict(
+                enum     = SingleEnum,
+                fields   = case['fields'],
+                members  = [SingleEnum.C],
+                string   = 'SingleEnum.C',
+                representation = case['representation'].replace(case['string'], 'SingleEnum.C'),
+                contents = case['contents'],
+                index    = 0,
+                value    = case['value'],
+                attrs    = case['attrs'],
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_deficient_attrs(self):
+
+        class DeficientEnum(AttrEnum):
+            __fields__ = 'f1', 'f2'
+            A = None
+            B = ...
+            C = 'C_attr_1'
+
+        return dict(
+                enum     = DeficientEnum,
+                fields   = ['f1', 'f2'],
+                members  = [DeficientEnum.A, DeficientEnum.B, DeficientEnum.C],
+                string   = 'DeficientEnum.C',
+                representation = "<DeficientEnum.C: f1='C_attr_1', f2=None>",
+                contents = [*self.common_enum_dunders, 'f1', 'f2', 'index', 'name', 'value'],
+                index    = 2,
+                value    = ('C_attr_1', None),
+                attrs    = {'f1': 'C_attr_1', 'f2': None},
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_value_ovr(self):
+        class ValueEnum(AttrEnum):
+            __fields__ = 'value',
+            A = 'A_attr'
+            C = 'C_attr'
+
+        return dict(
+                enum     = ValueEnum,
+                fields   = ['value'],
+                members  = [ValueEnum.A, ValueEnum.C],
+                string   = 'ValueEnum.C',
+                representation = "<ValueEnum.C: value='C_attr'>",
+                contents = [*self.common_enum_dunders, 'index', 'name', 'value'],
+                index    = 1,
+                value    = 'C_attr',
+                attrs    = {'value': 'C_attr'},
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_index_ovr(self):
+        class IndexEnum(AttrEnum):
+            __fields__ = 'index',
+            A = 7
+            C = 5
+
+        return dict(
+                enum     = IndexEnum,
+                fields   = ['index'],
+                members  = [IndexEnum.A, IndexEnum.C],
+                string   = 'IndexEnum.C',
+                representation = "<IndexEnum.C: index=5>",
+                contents = [*self.common_enum_dunders, 'index', 'name', 'value'],
+                index    = 5,
+                value    = 5,
+                attrs    = {'index': 5},
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_value_index_ovr(self):
+        class ValueIndexEnum(AttrEnum):
+            __fields__ = 'index', 'value'
+            A = 7, 'A_attr'
+            C = 5
+
+        return dict(
+                enum     = ValueIndexEnum,
+                fields   = ['index', 'value'],
+                members  = [ValueIndexEnum.A, ValueIndexEnum.C],
+                string   = 'ValueIndexEnum.C',
+                representation = "<ValueIndexEnum.C: index=5, value=None>",
+                contents = [*self.common_enum_dunders, 'index', 'name', 'value'],
+                index    = 5,
+                value    = None,
+                attrs    = {'index': 5, 'value': None},
+        )
+
+    @fixture(scope='class')
+    def testcase_enum_empty(self):
+        class EmptyEnum(AttrEnum):
+            __fields__ = 'value', 'data'
+        return EmptyEnum, ('value', 'data')
+
+# ——————————————————————————————————————————————————————— Tests —————————————————————————————————————————————————————— #
+
+    def test_doc(self, testcase_doc_sample):
+        member = testcase_doc_sample.B
+        assert member.name == 'B'
+        assert member.index == 1
+        assert member.value == ('data_B', 42, None)
+        assert member.attr1 == 'data_B'
+        assert member.attr2 == 42
+        assert member.attr3 is None
+        assert repr(member) == "<Sample.B: attr1='data_B', attr2=42, attr3=None>"
+
+    def test_doc_value_enum(self, testcase_doc_value_sample):
+        member = testcase_doc_value_sample.B
+        assert member.name == 'B'
+        assert member.index == 3
+        assert member.value == 'data_B'
+        assert repr(member) == "<ValueSample.B: index=3, value='data_B'>"
+
+    def test_doc_void_enum(self, testcase_doc_void_sample):
+        member = testcase_doc_void_sample.B
+        assert member.name == 'B'
+        assert member.index == 1
+        assert member.value == 7
+        assert repr(member) == "<VoidSample.B: 7>"
+
+    all_enum_testcases = [
+        *enum_testcases, 'testcase_enum_1_member', 'testcase_enum_deficient_attrs',
+        'testcase_enum_value_ovr', 'testcase_enum_index_ovr', 'testcase_enum_value_index_ovr'
+    ]
+
+    @mark.parametrize('testcase', (lazy_fixture(case) for case in all_enum_testcases), ids=gen_ids.__func__)
+    def test_enum(self, testcase):
+        enum, fields, members, str_res, repr_res, dir_res, index, value, attrs = testcase.values()
+        assert list(enum) == members
+        assert str(enum.C) == str_res
+        assert repr(enum.C) == repr_res
+        assert dir(enum.C) == dir_res
+        assert enum.C.index == index
+        assert enum.C.value == value
+        assert {attr: getattr(enum.C, attr) for attr in fields} == attrs
+        assert enum['C'] == enum.C
+        assert enum(value) == enum.C
+
+    def test_enum_empty(self, testcase_enum_empty):
+        enum, fields = testcase_enum_empty
+        assert str(enum) == f"<enum '{enum.__name__}'>"
+        assert list(enum) == []
+        assert enum.__fields__ == fields
+        with raises(KeyError):
+            invalid = enum['__fields__']
+
+    @mark.xfail(reason="enum should have at least one member - see AttrEnum 'Deny reserved names' comment")
+    @mark.parametrize('name', ['name', '_sunder_', '__dunder__'])
+    def test_invalid_field_no_members(self, name):
+        with raises(ValueError):
+            class InvalidFieldEnum(AttrEnum):
+                __fields__ = 'valid', name, 'other'
+
+    @mark.parametrize('name', ['name', '_sunder_', '__dunder__'])
+    def test_invalid_field(self, name):
+        with raises(ValueError, match=f"invalid field name '{name}'"):
+            class InvalidFieldEnum(AttrEnum):
+                __fields__ = 'valid', name, 'other'
+                A = 'whatever'
+
+    def test_too_many_attrs(self):
+        class ValidEnum(AttrEnum):
+            __fields__ = 'value', 'a', 'b'
+            A = 1, 'A_a'
+            B = 77, 'B_a', 'B_b'
+        assert ValidEnum.A.value == 1
+        assert ValidEnum.A.b is None
+        assert ValidEnum.B.value == 77
+        assert ValidEnum.B.b == 'B_b'
+
+        with raises(ValueError, match="enum member has too many attrs: expected 3, got 4"):
+            class TooManyAttrsEnum(AttrEnum):
+                __fields__ = 'value', 'a', 'b'
+                C = 42, 'C_a', 'C_b', 'extra'
