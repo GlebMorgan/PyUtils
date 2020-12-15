@@ -35,10 +35,10 @@ DUMMY_RESULTS: Final[Dict[str, TestData]] = dict(ok=(42, int), fail=(0, str))
 
 
 class Tester:
-    # all tester classes under respectful name
-    all: Dict[str, Type[Tester]] = {}
+    # List of all tester classes
+    all: List[Type[Tester]] = []
 
-    # type unit being tested by each individual class
+    # Type unit being tested by each individual class
     typevar: Typespec = None
 
     # (obj, typespec) pairs valid/invalid to each individual unit
@@ -57,7 +57,8 @@ class Tester:
         raise NotImplementedError  # empty generator fallback implementation
 
     def __init_subclass__(cls, **kwargs):
-        cls.all[cls.__name__.strip('_')] = cls
+        cls.name = cls.__name__.strip('_')
+        Tester.all.append(cls)
         for name in 'ok', 'fail', 'err':
             attr = getattr(cls, name)
             if callable(attr):
@@ -80,11 +81,11 @@ def gen_specs(outcome: Outcome, *, level=1) -> TestData:
         yield DUMMY_RESULTS[outcome]
         return
 
-    for tester in Tester.all.values():
+    for tester in Tester.all:
         test_cases = getattr(tester, outcome)
         yield from ((obj, typespec) for obj, typespec in test_cases if is_valid_typearg(typespec))
 
-    for tester in Tester.all.values():
+    for tester in Tester.all:
         method = getattr(tester, f'gen_{outcome}')
         specs = dict(ok=list(gen_specs('ok', level=level + 1)), fail=list(gen_specs('fail', level=level + 1)))
 
@@ -751,7 +752,7 @@ class _Type_(Tester):
         yield type('STP', (), {'wrong': lambda self: None}), Type[SP]
         yield type('STP', (), {'meth': None}), Type[SP]
         yield tuple, Type[NamedTuple]
-        yield cls.all['NamedTuple'].nt, Type[NamedTuple]
+        yield _NamedTuple_.nt, Type[NamedTuple]
         yield NamedTuple, Type[NT]
         # do not even try treat TypeVar bound types or constraints as anchors for typechecking
         # TypeVar object is simply not a type and thus Type[T] is an error
@@ -776,74 +777,74 @@ class _Type_(Tester):
 
 # ————————————————————————————————————————————————————— Fixtures ————————————————————————————————————————————————————— #
 
+static_ok_data: Tuple[TestData, ...] = tuple(chain(*(tester.ok for tester in Tester.all)))
+static_fail_data: Tuple[TestData, ...] = tuple(chain(*(tester.fail for tester in Tester.all)))
+static_err_data: Tuple[TestData, ...] = tuple(chain(*(tester.err for tester in Tester.all)))
+dynamic_ok_data: Tuple[Type[Tester]] = tuple(tester for tester in Tester.all if 'gen_ok' in tester.__dict__)
+dynamic_fail_data: Tuple[Type[Tester]] = tuple(tester for tester in Tester.all if 'gen_fail' in tester.__dict__)
+
+
 @fixture(scope='module')
 def spec_data():
     return dict(ok=list(gen_specs('ok')), fail=list(gen_specs('fail')))
 
 
-@fixture(scope='module', params=tuple(chain(*(tester.ok for tester in Tester.all.values()))),
-         ids='{0[0]}-{0[1]}-ok'.format)
-def ok_data(request):
+@fixture(scope='module', params=static_ok_data, ids='{0[0]}-{0[1]}-ok'.format)
+def testcase_ok(request):
     return request.param
 
 
-@fixture(scope='module', params=tuple(chain(*(tester.fail for tester in Tester.all.values()))),
-         ids='{0[0]}-{0[1]}-fail'.format)
-def fail_data(request):
+@fixture(scope='module', params=static_fail_data, ids='{0[0]}-{0[1]}-fail'.format)
+def testcase_fail(request):
     return request.param
 
 
-@fixture(scope='module', params=tuple(chain(*(tester.err for tester in Tester.all.values()))),
-         ids='{0[0]}-{0[1]}-err'.format)
-def err_data(request):
+@fixture(scope='module', params=static_err_data, ids='{0[0]}-{0[1]}-err'.format)
+def testcase_err(request):
     return request.param
 
 
-@fixture(scope='module', params=Tester.all.values(), ids=(f'{name}-dynamic-ok' for name in Tester.all.keys()))
-def dynamic_ok_data(request, spec_data):
-    try:
-        return request.param.gen_ok(spec_data)
-    except NotImplementedError:
-        skip(f"No dynamic pass-test for class {request.param.__name__}")
+@fixture(scope='module', params=dynamic_ok_data, ids='{0.name}-dynamic-ok'.format)
+def testcase_dynamic_ok(request, spec_data):
+    tester = request.param
+    return tester.gen_ok(spec_data)
 
 
-@fixture(params=Tester.all.values(), ids=(f'{name}-dynamic-fail' for name in Tester.all.keys()))
-def dynamic_fail_data(request, spec_data):
-    try:
-        return request.param.gen_fail(spec_data)
-    except NotImplementedError:
-        skip(f"No dynamic failure-test for class {request.param.__name__}")
+@fixture(scope='module', params=dynamic_fail_data, ids='{0.name}-dynamic-fail'.format)
+def testcase_dynamic_fail(request, spec_data):
+    tester = request.param
+    return tester.gen_fail(spec_data)
 
 
 # ———————————————————————————————————————————————————————— Tests ————————————————————————————————————————————————————— #
 
-def test_static_ok(ok_data):
-    value, spec = ok_data
+def test_static_ok(testcase_ok):
+    value, spec = testcase_ok
     _check_type_(value, spec, argname='<test>')
 
 
-def test_static_fail(fail_data):
-    value, spec = fail_data
+def test_static_fail(testcase_fail):
+    value, spec = testcase_fail
     with raises(TypecheckError):
         _check_type_(value, spec, argname='<test>')
         fail(f"DID NOT RAISE TypecheckError with '{value}' against '{_format_type_(spec)}'")
 
 
-def test_static_err(err_data):
-    value, spec, error, pattern = err_data
+def test_static_err(testcase_err):
+    value, spec, error, pattern = testcase_err
     with raises(error, match=pattern):
         _check_type_(value, spec, argname='<test>')
 
 
 @mark.slow
-def test_dynamic_ok(dynamic_ok_data):
-    for value, spec in dynamic_ok_data:
+def test_dynamic_ok(testcase_dynamic_ok):
+    for value, spec in testcase_dynamic_ok:
         _check_type_(value, spec, argname='<test>')
 
 
 @mark.slow
-def test_dynamic_fail(dynamic_fail_data):
-    for value, spec in dynamic_fail_data:
+def test_dynamic_fail(testcase_dynamic_fail):
+    for value, spec in testcase_dynamic_fail:
         with raises(TypecheckError):
             _check_type_(value, spec, argname='<test>')
             fail(f"DID NOT RAISE TypecheckError with '{value}' against '{_format_type_(spec)}'")
