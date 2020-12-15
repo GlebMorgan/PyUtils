@@ -8,15 +8,25 @@ from typing import NamedTuple, Iterator, Iterable, List, Callable, Dict
 from pytest import fixture, mark, raises, warns, param
 from pytest import lazy_fixture
 
-from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, typename, Tree, AttrEnum
+from utils.utils import bytewise, bitwise, deprecated, autorepr, spy, Tree, AttrEnum
+
+
+def typename(obj: object) -> str:
+    """Get simple name of the class from given object `obj`"""
+    return obj.__class__.__name__
+
+
+def get_first_item(string: str) -> str:
+    """Get first space-separated word from `string`"""
+    return string.split(maxsplit=1)[0].strip()
 
 
 class TestBytewise:
 
     patterns = (
         'general        00-42-FF-01-02-03-A0-0A',
-        'all hex nums   01-23-45-67-89-AB-CD-EF',
-        'single byte    CD',
+        'all_hex_nums   01-23-45-67-89-AB-CD-EF',
+        'single_byte    CD',
         'zeros          00-00-00-00-00-00-00-00',
         'FFs            FF-FF-FF-FF-FF-FF-FF-FF',
         'empty          -',
@@ -30,21 +40,21 @@ class TestBytewise:
         'two            AA-BB-CC-DD-EE    ..-EE             2',
         'one            AA                AA                2',
         'zero           -                 -                 2',
-        'fits freely    AA-BB-CC-DD-EE    AA-BB-CC-DD-EE    999999',
-        'two + equals   AA-BB             AA-BB             2',
+        'fits_freely    AA-BB-CC-DD-EE    AA-BB-CC-DD-EE    999999',
+        'two+equals     AA-BB             AA-BB             2',
     )
 
     @staticmethod
     def gen_ids(item: str):
         return item.split('  ', maxsplit=1)[0].strip()
 
-    @fixture(scope='class', params=patterns, ids=gen_ids.__func__)
+    @fixture(scope='class', params=patterns, ids=get_first_item)
     def data_bytewise(self, request):
         result = ' '.join(request.param.split()[-1].split('-')).strip()
         operand = bytes.fromhex(result)
         return operand, result
 
-    @fixture(scope='class', params=patterns_limit, ids=gen_ids.__func__)
+    @fixture(scope='class', params=patterns_limit, ids=get_first_item)
     def data_bytewise_limit(self, request):
         *_, operand, result, limit = request.param.split()
         operand = bytes.fromhex(' '.join(operand.split('-')))
@@ -89,14 +99,14 @@ class TestBytewise:
 class TestBitwise:
     patterns = (
         'general        00-42-FF-01-02-03-A0-0A',
-        'all hex nums   01-23-45-67-89-AB-CD-EF',
-        'single byte    CD',
+        'all_hex_nums   01-23-45-67-89-AB-CD-EF',
+        'single_byte    CD',
         'zeros          00-00-00-00-00-00-00-00',
         'FFs            FF-FF-FF-FF-FF-FF-FF-FF',
         'empty          -',
     )
 
-    @fixture(scope='class', params=patterns, ids=TestBytewise.gen_ids)
+    @fixture(scope='class', params=patterns, ids=get_first_item)
     def data_bitwise(self, request):
         octets = request.param.split()[-1].split('-')
         operand = bytes.fromhex(' '.join(octets))

@@ -18,8 +18,8 @@ from wrapt import decorator
 
 __all__ = [
     'test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'schain', 'isdunder', 'issunder', 'isiterable',
-    'typename', 'spy', 'Disposable', 'getter', 'setter', 'legacy', 'stack', 'Dummy', 'null', 'clipboard',
-    'ignore', 'classproperty', 'Tree', 'AttrEnum',
+    'spy', 'Disposable', 'getter', 'setter', 'legacy', 'stack', 'Dummy', 'null', 'clipboard', 'ignore',
+    'classproperty', 'Tree', 'AttrEnum',
 ]
 
 
@@ -221,11 +221,6 @@ def isiterable(obj) -> bool:
         return False
     else:
         return isinstance(obj, Iterable)
-
-
-def typename(obj: Any) -> str:
-    """Return simple name of the class of given object"""
-    return obj.__class__.__name__
 
 
 class Disposable:
