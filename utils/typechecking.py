@@ -71,9 +71,7 @@ from wrapt import decorator
 
 # TODO: support subscripted builtins and ABCs like `list[str]` in Python 3.9
 
-# TODO: change @check_args signature (once again) to @check_args(*excluded: str, check_defaults: bool = False)
-
-# CONSIDER: `except=` option (or similar) for @check_args() to exclude specified argnames from typechecking
+# CONSIDER: change @check_args signature (once again) to @check_args(*excluded: str, check_defaults: bool = False)
 
 # CONSIDER: add support for applying @check_args() to properties in addition to classmethods and staticmethods
 
@@ -123,8 +121,8 @@ def check_args(*arguments: str, check_defaults: bool = False):
     If some argument of wrapped callable has default value set to `None`, its annotation is
         automatically converted to `Optional[<annotation>]` (by `typing.get_type_hints()` used under the hood)
     >>> @check_args
-    >>> def func(a: Union[int, Dict[str, int], Tuple[Any, str]]):
-    >>>     ...
+    ... def func(a: Union[int, Dict[str, int], Tuple[Any, str]]): ...
+    ...
     >>> func(1)  # typechecks: `1` is an `int`
     >>> func(True)  # typechecks: `bool` is a subclass of `int`
     >>> func({})  # typechecks: empty dict is a `dict`
@@ -136,8 +134,8 @@ def check_args(*arguments: str, check_defaults: bool = False):
     >>> func((0, 's', 'extra'))  # fails: tuple has an extra element
 
     >>> @check_args('a', 'b')
-    >>> def func(a: Any, b: int, c: bool):
-    >>>     ...
+    ... def func(a: Any, b: int, c: bool):
+    ...     ...
     >>> func(object, 1, 's')  # typechecks: only 'a' and 'b' arguments are checked
     """
 
@@ -150,8 +148,10 @@ def check_args(*arguments: str, check_defaults: bool = False):
                             " __init__() method could be decorated instead")
 
         # Fetch annotations from `function` reliably, even if it is classmethod or staticmethod
-        function = wrapee.__func__ if isinstance(wrapee, (classmethod, staticmethod)) else wrapee
-        type_hints = get_type_hints(function)
+        if isinstance(wrapee, (classmethod, staticmethod)):
+            type_hints = get_type_hints(wrapee.__func__)
+        else:
+            type_hints = get_type_hints(wrapee)
 
         # Get annotations mapping for requested arguments
         if not argnames:
@@ -168,7 +168,6 @@ def check_args(*arguments: str, check_defaults: bool = False):
         @decorator
         def wrapper(func, instance, args, kwargs):
             sign = signature(func)
-            # DEBUG: print('', f'{func = }', f'{instance = }', f'{args = }', f'{sign = }', sep='\n')
             parameters = sign.bind(*args, **kwargs)
             if check_defaults:
                 parameters.apply_defaults()

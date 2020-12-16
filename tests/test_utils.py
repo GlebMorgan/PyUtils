@@ -275,7 +275,7 @@ class TestSpy:
                 yield param((generator(n), n+1, list(generator(n))), id=f'{name}-{n}')
 
     @fixture
-    def lookahead_testcase(self, request):
+    def testcase_lookahead(self, request):
         """
         Fixture to generate test cases for lookahead
         Yields (test node id, iterable size, spy object, advanced lookahead iterator, reference list)
@@ -287,7 +287,7 @@ class TestSpy:
         return self.LookaheadTestcase(spy_object, lookahead, introspected, depth, reference)
 
     @fixture(params=[range(8), list(range(8)), islice(range(10), 8)], ids=typename)
-    def laziness_testcase(self, request):
+    def testcase_laziness(self, request):
         spy_object = spy(request.param)
         return spy_object, spy_object.lookahead()
 
@@ -300,9 +300,9 @@ class TestSpy:
         assert list(iterator) == [2, 3]
         assert list(lookahead) == []
 
-    @mark.parametrize('lookahead_testcase', lookahead_params.__func__(sizes, iterable_generators), indirect=True)
-    def test_lookahead(self, lookahead_testcase):
-        spy_object, lookahead, introspected, k, reference = lookahead_testcase
+    @mark.parametrize('testcase_lookahead', lookahead_params.__func__(sizes, iterable_generators), indirect=True)
+    def test_lookahead(self, testcase_lookahead):
+        spy_object, lookahead, introspected, k, reference = testcase_lookahead
         for attr in '__next__', '__iter__':
             assert hasattr(spy_object, attr)
             assert hasattr(lookahead, attr)
@@ -314,15 +314,15 @@ class TestSpy:
         with raises(StopIteration):
             lookahead.__next__()
 
-    @mark.parametrize('lookahead_testcase', overflow_params.__func__(sizes, iterable_generators), indirect=True)
-    def test_lookahead_overflow(self, lookahead_testcase):
-        spy_object, lookahead, introspected, k, reference = lookahead_testcase
+    @mark.parametrize('testcase_lookahead', overflow_params.__func__(sizes, iterable_generators), indirect=True)
+    def test_lookahead_overflow(self, testcase_lookahead):
+        spy_object, lookahead, introspected, k, reference = testcase_lookahead
         assert introspected == reference
         assert list(lookahead) == []
         assert list(spy_object) == reference
 
-    def test_laziness(self, laziness_testcase):
-        spy_object, lookahead = laziness_testcase
+    def test_laziness(self, testcase_laziness):
+        spy_object, lookahead = testcase_laziness
         for i in range(4):
             item = lookahead.__next__()
             assert spy_object.__next__() is item

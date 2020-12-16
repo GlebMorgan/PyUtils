@@ -19,6 +19,11 @@ def check_result(method: str, operand, args, expected, *,
         assert all(type(num) == subtype for num in result)
 
 
+def collapse_whitespace(string: str) -> str:
+    """Replace sequences of spaces with a single one"""
+    return ' '.join(string.split())
+
+
 class TestSetClear:
 
     patterns = (
@@ -54,12 +59,12 @@ class TestSetClear:
         result = result.replace('1', '-').replace('0', '1').replace('-', '0')
         return ' '.join((operand, bits, result))
 
-    @fixture(scope='class', params=patterns, ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=patterns, ids=collapse_whitespace)
     def data_set_bits(self, request):
         operand, args, result = request.param.strip().split()
         return int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
 
-    @fixture(scope='class', params=map(invert_bits.__func__, patterns), ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=map(invert_bits.__func__, patterns), ids=collapse_whitespace)
     def data_clear_bits(self, request):
         operand, args, result = request.param.strip().split()
         return int(operand, 2), tuple(int(n) for n in args), Bits(result, 2)
@@ -155,7 +160,7 @@ class TestFlag:
      '0100 1 0',
     )
 
-    @fixture(scope='class', params=patterns, ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=patterns, ids=collapse_whitespace)
     def data_flag(self, request):
         operand, pos, result = request.param.strip().split()
         return int(operand, 2), int(pos), bool(int(result))
@@ -176,7 +181,7 @@ class TestFlags:
         '0110 2 (01)',
     )
 
-    @fixture(scope='class', params=patterns, ids=lambda par: ' '.join(par.split()))
+    @fixture(scope='class', params=patterns, ids=collapse_whitespace)
     def data_flags(self, request):
         operand, n, result = request.param.strip().split()
         return int(operand, 2), int(n), tuple(bool(int(bit)) for bit in result[1:-1])

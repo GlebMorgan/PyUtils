@@ -889,7 +889,7 @@ class TestCheckArgs:
             def method(self, a: int, b: str, c: float):
                 pass
 
-    data_argnames = ('noargs', [], ['a'], ['a', 'a'], ['a', 'c'], ['a', 'a', 'b'], ['a', 'b', 'c'])
+    data_argnames = (None, [], ['a'], ['a', 'a'], ['a', 'c'], ['a', 'a', 'b'], ['a', 'b', 'c'])
 
     data_methods = [
         # test case name          args, kwargs                 bind to      method name
@@ -906,11 +906,20 @@ class TestCheckArgs:
         ('custom_self',           (0, 's', 2.5), {},           Cases(),     'custom_self'),
     ]
 
+    @staticmethod
+    def format_argnames(argnames_list):
+        if argnames_list is None:
+            return 'no_args'
+        if not argnames_list:
+            return '[]'
+        else:
+            return ','.join(argnames_list)
+
 # ————————————————————————————————————————————————————— Fixtures ————————————————————————————————————————————————————— #
 
-    @fixture(scope='class', params=data_argnames, ids=''.join)
+    @fixture(scope='class', params=data_argnames, ids=format_argnames.__func__)
     def argnames(self, request):
-        return request.param if request.param != 'noargs' else None
+        return request.param if request.param is not None else None
 
     @fixture(scope='class')
     def check_args_decorator(self, argnames):
@@ -979,11 +988,11 @@ class TestCheckArgs:
         class ClassWithStaticmethod:
             @staticmethod
             @check_args_decorator
-            def outer_static_method(a:int, b:str, c:float=2.5):
+            def outer_static_method(a: int, b: str, c: float = 2.5):
                 pass
         return ClassWithStaticmethod
 
-    @fixture(scope='class', params=(['x'], ['a', 'x'], ['x', 'x']), ids=str)
+    @fixture(scope='class', params=(['x'], ['a', 'x'], ['x', 'x']), ids=','.join)
     def case_invalid_argnames(self, request):
         def func(a: int):
             pass
@@ -1064,13 +1073,13 @@ class TestCheckArgs:
         with raises(TypecheckError, match="argument 'a': None is not int"):
             case_decorator(None, [], 3)
 
-    @mark.parametrize('argnames', ([], ['value'], ['value', 'value']), ids=str, indirect=True)
+    @mark.parametrize('argnames', ([], ['value'], ['value', 'value']), ids=','.join, indirect=True)
     def test_property(self, case_property, argnames):
         case_property.prop = 's'
         assert case_property.a == 's'
         assert case_property.prop == 42
 
-    @mark.parametrize('argnames', ([], ['value'], ['value', 'value']), ids=str, indirect=True)
+    @mark.parametrize('argnames', ([], ['value'], ['value', 'value']), ids=','.join, indirect=True)
     def test_property_fail(self, case_property, argnames):
         err_msg = "argument 'value': 1.5 does not match any type specification from Union[Iterable, int]"
         with raises(TypecheckError, match=self.re.escape(err_msg)):

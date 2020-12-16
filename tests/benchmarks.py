@@ -15,7 +15,6 @@ from typing import Tuple, Callable, Sequence
 
 
 class Benchmark:
-
     """
     Base class for preparing and running benchmarks
     Intended to be inherited and provided with appropriate test data sets
@@ -81,7 +80,7 @@ class BenchmarkBitsExtract(Benchmark):
     __id__ = 'extract'
 
     def __init__(self, dataset_size: int):
-        from utils import Bits
+        from utils.bits import Bits
         functions = Bits.extract, Bits.extract2
         super().__init__(dataset_size, functions, owner=Bits)
 
@@ -103,7 +102,7 @@ class BenchmarkBytewise(Benchmark):
     __id__ = 'bytewise'
 
     def __init__(self, dataset_size: int, bytes_range: Tuple[int, int] = None, **kwargs):
-        from utils import bytewise, bytewise2
+        from utils.utils import bytewise, bytewise2
         functions = bytewise, bytewise2
         self.range: Tuple[int, int] = bytes_range
         super().__init__(dataset_size, functions, **kwargs)

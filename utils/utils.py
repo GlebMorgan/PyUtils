@@ -14,7 +14,23 @@ from wrapt import decorator
 
 # TODO: short module description, purpose
 
-# TODO: add 'raises' to docstrings everywhere
+# FEATURE: listattrs() function, probably separate from Filter class
+# CONSIDER: listattrs() coloring attrs based on type (method, function, dict attr, inherited attr, etc.)
+#     listattrs goes to filters.py <= it depends on Filter class a lot
+
+# FEATURE: console color-print module for Windows based on colorama – colors
+#   color toggle to allow for clean output for terminals that does not support colors for some reason
+#   implement support for indented levels of output, like `pip install` logging uses
+#   >>> from utils.colors import print
+#   >>> print('Some text')  # when just called, aliases built-in print()
+#   >>> print['red']('Some text')  # uses __class_getattr__
+#   >>> print.green('Some text')
+
+# FEATURE: colored logging module with custom handlers and indented levels system
+#   base scratch to start from – old PyUtils colored_logger.py
+
+# FEATURE: classtools wrapper around pydantic or similar
+
 
 __all__ = [
     'test', 'bytewise', 'bitwise', 'deprecated', 'autorepr', 'schain', 'isdunder', 'issunder', 'isiterable',
@@ -92,6 +108,7 @@ def bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool =
     In case the length of `byteseq` exceeds the value of specified `limit` argument, extra part of
         output is collapsed to an ellipsis and only the last element is shown after it (see example)
     If output is trimmed, `show_len` argument tells whether '(`<n>` bytes)' is appended to output
+    Raises `ValueError` if `limit` is less than 2
     >>> assert bytewise(b'12345', sep='-') == '31-32-33-34-35'
     >>> assert bytewise(bytes.fromhex('00 01 42 5A FF')) == '00 01 42 5A FF'
     >>> assert bytewise(b'python', limit=5) == '70 79 74 .. 6E (6 bytes)'
@@ -140,10 +157,10 @@ def deprecated(reason: str):
         Minimal required filter is 'default::DeprecationWarning:utils'
     If `reason` argument is specified, it will be displayed after the warning message
     >>> @deprecated('duck tape')
-    >>> def func():
-    >>>     ...
+    ... def func(): ...
+    ...
     >>> func()
-        "DeprecationWarning: Function 'func' is marked as deprecated (duck tape)"
+    DeprecationWarning: Function 'func' is marked as deprecated (duck tape)
     """
 
     @decorator
@@ -174,7 +191,9 @@ def autorepr(msg: str) -> Callable[[Any], str]:
     Generate canonical `__repr__()` method using provided `msg`
     >>> class Belarus:
     ...     __repr__ = autorepr('deserves respect')
-        <utils.autorepr.<locals>.Belarus deserves respect at 0x...>
+    ...
+    >>> repr(Belarus)
+    "<utils.autorepr.<locals>.Belarus deserves respect at 0x...>"
     """
 
     def __repr__(self):
@@ -228,6 +247,7 @@ class Disposable:
     Descriptor that clears its value after each access
     >>> class Class:
     ...     attr = Disposable(100500)
+    ...
     >>> obj = Class()
     >>> assert obj.attr == 100500  # returns initial value
     >>> obj.attr = 42  # descriptor value is set to 42
@@ -306,10 +326,10 @@ class GetterDescriptor:
 
     # NOTE: __slots__ break dynamic docstrings
 
-    def __init__(self, func):
+    def __init__(self, method):
         self.name: str
-        self.getter = func
-        self.__doc__ = func.__doc__
+        self.getter = method
+        self.__doc__ = method.__doc__
 
     def __set_name__(self, owner, name):
         self.name = name
@@ -352,10 +372,10 @@ class SetterDescriptor:
 
     # NOTE: __slots__ break dynamic docstrings
 
-    def __init__(self, func):
+    def __init__(self, method):
         self.name: str
-        self.setter = func
-        self.__doc__ = func.__doc__
+        self.setter = method
+        self.__doc__ = method.__doc__
 
     def __set_name__(self, owner, name):
         self.name = name
@@ -371,7 +391,7 @@ setter = SetterDescriptor
 def legacy(function):
     """
     Decorator to mark wrapped function or method is out of use
-    Raises `RuntimeError` if an attempt to call the wrapped object is made
+    Returns new function that raises `RuntimeError` when called
     """
     def wrapper(*args, **kwargs):
         obj_type: str = function.__class__.__name__.replace('type', 'class')
@@ -458,14 +478,19 @@ class ignore:
     Accepts any amount of exception types, subclasses are respected
     If no error type is provided, returns nullcontext that does nothing –
         that simplifies usage in case exception types are calculated dymamically
+
     >>> with ignore(LookupError):
     ...     raise KeyError()  # KeyError is a subclass of LookupError, so it is filtered out
+    ...
+
     >>> with ignore(LookupError):
     ...     raise RuntimeError('message')  # RuntimeError does not pass a filter, so it is raised
-        "RuntimeError: message"
+    ...
+    RuntimeError: message
     >>> with ignore():
     ...     raise Exception('message')  # no exception types are being passed, so nothing is filtered
-        "Exception: message"
+    ...
+    Exception: message
     """
 
     def __new__(cls, *args):
@@ -594,7 +619,7 @@ class Tree:
               parent: Union[str, ParentHandle] = None) -> Tree:
         """
         Build the tree out of collection of items bottom-up following references to parent nodes
-        Arguments `naming` and `parents` semantics is similar to correspondent arguments of `.convert()` method
+        Semantics of `naming` and `parents` arguments is similar to corresponding arguments of `.convert()` method
         Elements of `items` collection should be hashable
         """
 
