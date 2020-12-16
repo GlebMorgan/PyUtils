@@ -5,7 +5,7 @@ from importlib import import_module
 from inspect import signature, cleandoc
 from pathlib import Path
 from types import FunctionType, ModuleType, MethodType
-from typing import Union
+from typing import Union, get_type_hints
 
 
 @contextmanager
@@ -82,11 +82,12 @@ def gen_class_doc(cls):
         return title
 
 
-def gen_func_doc(func, env, owner: type = None):
+def gen_func_doc(func, owner: type = None):
     # Eval string annotations to have them neat & clean in signature
-    for name, ann in func.__annotations__.items():
-        if isinstance(ann, str):
-            func.__annotations__[name] = eval(ann, env)
+    try:
+        func.__annotations__ = get_type_hints(func)
+    except NameError:
+        pass
 
     # Acquire string representation of `func` signature
     sign = func.__name__ + str(signature(func))
@@ -111,11 +112,11 @@ def gen_doc(readme: str, module: ModuleType):
     for name in module.__all__:
         item = getattr(module, name)
         if isinstance(item, FunctionType):
-            result.append(gen_func_doc(item, module.__dict__))
+            result.append(gen_func_doc(item))
         elif isinstance(item, type):
             result.append(gen_class_doc(item))
             for attr, method in iter_members(item):
-                result.append(gen_func_doc(method, module.__dict__, owner=item))
+                result.append(gen_func_doc(method, owner=item))
         else:
             result.append(readme_find(readme, name))
     return sep.join(result)
@@ -146,7 +147,7 @@ def gen_contents(doc: str):
 
 
 def update_readme(project: str, module_name: str):
-    with path_modifier(r'D:\GLEB\Python\PyUtils'):
+    with path_modifier(project):
         module = import_module(module_name)
     readme_file = Path(project) / 'README.md'
     readme = readme_file.read_text(encoding='utf8')
@@ -171,6 +172,6 @@ if __name__ == '__main__':
         raise RuntimeError("project path and module name should be specified")
 
     path = sys.argv[1]
-    module = sys.argv[2]
+    module_name = sys.argv[2]
 
-    update_readme(path, module)
+    update_readme(path, module_name)
