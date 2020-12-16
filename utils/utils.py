@@ -1,3 +1,9 @@
+"""
+Small utilities and helper objects that do not need a dedicated module
+Intended for use in both application development and interactive Python interpreter sessions
+"""
+
+
 from __future__ import annotations
 
 import re
@@ -37,6 +43,10 @@ __all__ = [
     'spy', 'Disposable', 'getter', 'setter', 'legacy', 'stack', 'Dummy', 'null', 'clipboard', 'ignore',
     'classproperty', 'Tree', 'AttrEnum',
 ]
+
+
+T = TypeVar('T')
+Decorator = Callable[[Callable], Callable]
 
 
 class test:
@@ -107,7 +117,7 @@ def bytewise(byteseq: bytes, sep: str = ' ', limit: int = None, show_len: bool =
     Functionally is the inverse of `bytes.fromhex()`
     In case the length of `byteseq` exceeds the value of specified `limit` argument, extra part of
         output is collapsed to an ellipsis and only the last element is shown after it (see example)
-    If output is trimmed, `show_len` argument tells whether '(`<n>` bytes)' is appended to output
+    If output is trimmed, `show_len` argument tells whether '(<n> bytes)' is appended to output
     Raises `ValueError` if `limit` is less than 2
     >>> assert bytewise(b'12345', sep='-') == '31-32-33-34-35'
     >>> assert bytewise(bytes.fromhex('00 01 42 5A FF')) == '00 01 42 5A FF'
@@ -150,7 +160,7 @@ def bitwise(byteseq: bytes, sep: str = ' ') -> str:
     return sep.join(f"{byte:08b}" for byte in byteseq)
 
 
-def deprecated(reason: str):
+def deprecated(reason: str) -> Decorator:
     """
     Issue `DeprecationWarning` before invoking the wrapee function
     Note: Warning filters should be enabled in order for the warning to be displayed.
@@ -202,7 +212,7 @@ def autorepr(msg: str) -> Callable[[Any], str]:
     return __repr__
 
 
-def schain(*items):
+def schain(*items: Union[T, Iterable[T]]) -> Iterator[T]:
     """
     SmartChain – extended `itertools.chain()`
       • accepts singular objects as well as iterables
@@ -221,13 +231,13 @@ def schain(*items):
 
 
 def isdunder(name: str) -> bool:
-    """Return whether `name` is a __double_underscore__ name (from enum module)"""
+    """Return whether `name` is a __double_underscore__ name (from `enum` module)"""
     return (name[:2] == name[-2:] == '__' and
             name[2:3] != '_' and name[-3:-2] != '_' and
             len(name) > 4)
 
 
-def issunder(name):
+def issunder(name: str) -> bool:
     """Return whether `name` is a _single_underscore_ name"""
     return (name[:1] == name[-1:] == '_' and
             name[1:2] != '_' and name[-2:-1] != '_' and
@@ -273,7 +283,7 @@ class spy:
     """
     Iterator around given iterable with separate independent iterator branch for lookahead
     `.lookahead()` returns an iterator that advances the underlying iterable,
-        but does not influence on main iteration branch
+        but does not influence main iteration branch
     `spy` object itself works just as conventional iterable regardless of `.lookahead()` state
     >>> iterator = spy(range(1, 3))  # spy object wraps range(5)
     >>> lookahead = iterator.lookahead()  # independent lookahead iterator is created
@@ -284,7 +294,7 @@ class spy:
     >>> assert list(lookahead) == []  # exhausted
     """
 
-    def __init__(self, iterable):
+    def __init__(self, iterable: Iterable[T]):
         self.source = iter(iterable)
         self.cache = []
 
@@ -297,7 +307,7 @@ class spy:
         else:
             return next(self.source)
 
-    def lookahead(self) -> Iterator:
+    def lookahead(self) -> Iterator[T]:
         for item in self.source:
             self.cache.append(item)
             yield item
@@ -388,7 +398,7 @@ getter = GetterDescriptor
 setter = SetterDescriptor
 
 
-def legacy(function):
+def legacy(function) -> Decorator:
     """
     Decorator to mark wrapped function or method is out of use
     Returns new function that raises `RuntimeError` when called
@@ -399,8 +409,8 @@ def legacy(function):
     return wrapper
 
 
-def stack(iterable, *, indent=4):
-    """Print iterable in a column"""
+def stack(iterable: Iterable, *, indent: int = 4):
+    """Print given iterable in a column"""
     whitespace = ' '*indent
     if isinstance(iterable, dict):
         items = (f'{whitespace}{key}: {item}' for key, item in iterable.items())
@@ -412,8 +422,8 @@ def stack(iterable, *, indent=4):
 class Dummy:
     """
     Mock no-op class returning itself on every attr access or method call
-    Intended for avoiding both if-checks and attribute errors when dealing with objects
-    Evaluates to False on logical operations
+    Intended for avoiding both if-checks and attribute errors when dealing with optional values
+    Evaluates to `False` on logical operations
     >>> dummy = Dummy('whatever', accepts='any args')
     >>> assert str(dummy) == 'Dummy'
     >>> assert dummy.whatever is dummy
@@ -443,6 +453,7 @@ class Dummy:
 class NullType:
     """
     Sentinel object for denoting the absence of a value
+    Evaluates to `False` on logical comparisons
     Should not be used as a distinct value for some attribute or variable
     """
 
@@ -476,7 +487,7 @@ class ignore:
     """
     Context manager for filtering specified errors
     Accepts any amount of exception types, subclasses are respected
-    If no error type is provided, returns nullcontext that does nothing –
+    If no error type is provided, it returns `nullcontext` which does nothing –
         that simplifies usage in case exception types are calculated dymamically
 
     >>> with ignore(LookupError):
@@ -566,8 +577,8 @@ class Tree:
     def render(self, style: Literal['strict', 'smooth', 'empty'] = 'strict', empty: str = '<Empty tree>'):
         """
         Create tree-like visual representation string
-        Strings used for visualising tree branches are determined by 'style' argument
-        Empty tree representation is specified by 'empty' argument
+        Strings used for visualising tree branches are determined by `style` argument
+        Empty tree representation is specified by `empty` argument
         """
 
         if style not in self.marker_styles.keys():
@@ -591,11 +602,11 @@ class Tree:
     @classmethod
     def convert(cls, root: Item, naming: Union[str, NameHandle], children: Union[str, ChildrenHandle]) -> Tree:
         """
-        Build the tree starting from given root item top-down following references to child nodes
-        The name for each generated node is determined by 'naming' argument, which can be:
+        Build the tree starting from given `root` item top-down following references to child nodes
+        The name for each generated node is determined by `naming` argument, which can be:
             • string – defines the name of an item's attribute, so that `node.name = item.<name>`
             • callable – defines a callable of a single argument, so that `node.name = <callable>(item)`
-        Similarly, 'children' argument defines a handle for acquiring a list of item's children.
+        Similarly, `children` argument defines a handle for acquiring a list of item's children.
             It could be whether a item's attribute name or a single-argument callable hook
         """
 
@@ -618,8 +629,8 @@ class Tree:
     def build(cls, items: Iterable[Item], naming: Union[str, NameHandle],
               parent: Union[str, ParentHandle] = None) -> Tree:
         """
-        Build the tree out of collection of items bottom-up following references to parent nodes
-        Semantics of `naming` and `parents` arguments is similar to corresponding arguments of `.convert()` method
+        Build the tree out of `items` collection bottom-up following references to parent nodes
+        Semantics of `naming` and `parent` arguments is similar to corresponding arguments of `.convert()` method
         Elements of `items` collection should be hashable
         """
 
@@ -664,7 +675,7 @@ class AttrEnum(Enum):
         on the very first line of enum class body (somewhat similar to Python `__slots__`)
     Attribute values are set by assigning each `AttrEnum` member with a tuple of values,
         that correspond to specified `__fields__`; missing values fallback to `None`
-    Attribute `.index` is set automatically and defaults to enum member index number within order of declaration
+    `.index` attribute is set automatically and defaults to enum member index number within order of declaration
     Both `.value` and `.index` attributes may be overridden by providing their names in `__fields__`
     If `__fields__` tuple is not specified, only `.index` attribute is added to enum member implicitly;
         besides that the class would generally behave like conventional `Enum`

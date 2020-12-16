@@ -3,7 +3,7 @@ Module for annotation-driven function call typechecking with no inspection of co
 Ideologically intended for human-bound use cases such as rough user input viability checks
 
 API:
-    • @check_args – decorator that performs typechecking on specified (or all) arguments
+    • `@check_args` – decorator that performs typechecking on specified (or all) arguments
         of the decorated function / method immediately before the actual call
 
 Typecheck machinery glossary:
@@ -19,43 +19,45 @@ Typecheck machinery glossary:
 Supported features:
     • first-level typechecking against provided type annotation
     • all type specificators provided by `typing` module for Python 3.8
-    • structure checks for `Tuple`, excluding homogeneous tuples (like `Tuple[str, ...]`)
-    • structure checks for `TypedDict`
-    • subclass checks for `NamedTuple`
+    • structure checks for `Tuple`s, excluding homogeneous tuples (like `Tuple[str, ...]`)
+    • structure checks for `TypedDict`s
+    • subclass checks for `NamedTuple`s
     • typechecking against bound types and constraints of `TypeVar`s
     • runtime-checkable `Protocol`s
     • simplified `IO` class checks
-    • automatic `None` -> `NoneType` conversion (by `typing.get_type_hints()` used under the hood)
+    • automatic `None` –> `NoneType` conversion (by `typing.get_type_hints()` used under the hood)
 
-Behaviours that this module was NOT designed to support:
+Behaviours that this module was **NOT** designed to support:
     • inspecting of contents for iterables and containers, including homogeneous tuple typespecs
     • inspecting callable signatures
     • inspecting annotations of interface and protocol classes
     • checks that involve applying a specific type to generic classes
     • rigorous subclass checks of complex type specificators inside `Type[...]`
     • complicated `IO` type checks
-    • resolving sForwardRef`s
+    • resolving ForwardRef`s
 
 Supported type specifications:
-    • Bare types, including NoneType
-    • SpecialForms:
-        Any, ClassVar, Final, Literal, Optional, Union
+    • Bare types, including `NoneType`
+    • `SpecialForm`s:
+        `Any`, `ClassVar`, `Final`, `Literal`, `Optional`, `Union`
     • Interfaces:
-        Awaitable, Callable, ContextManager, AsyncContextManager, Coroutine, Generator,
-        AsyncGenerator, Hashable, Iterable, AsyncIterable, Iterator, AsyncIterator, Reversible, Sized
+        `Awaitable`, `Callable`, `ContextManager`, `AsyncContextManager`, `Coroutine`,
+        `Generator`, `AsyncGenerator`, `Hashable`, `Iterable`, `AsyncIterable`, `Iterator`,
+        `AsyncIterator`, `Reversible`, `Sized`
     • Protocols:
-        SupportsAbs, SupportsBytes, SupportsComplex, SupportsFloat, SupportsIndex, SupportsInt, SupportsRound
-    • Custom runtime-checkable protocols (derived from Protocol)
+        `SupportsAbs`, `SupportsBytes`, `SupportsComplex`, `SupportsFloat`,
+        `SupportsIndex`, `SupportsInt`, `SupportsRound`
+    • Custom runtime-checkable protocols (derived from `Protocol`)
     • Containers:
-        ChainMap, Collection, Container, Counter, Deque, Dict, DefaultDict, OrderedDict,
-        ItemsView, KeysView, ValuesView, List, Mapping, MutableMapping, MappingView, Sequence, MutableSequence,
-        Set, FrozenSet, AbstractSet, MutableSet, Tuple
+        `ChainMap`, `Collection`, `Container`, `Counter`, `Deque`, `Dict`, `DefaultDict`, `OrderedDict`,
+        `ItemsView`, `KeysView`, `ValuesView`, `List`, `Mapping`, `MutableMapping`, `MappingView`,
+        `Sequence`, `MutableSequence`, `Set`, `FrozenSet`, `AbstractSet`, `MutableSet`, `Tuple`
     • Type references:
-        Type, ByteString, Pattern, Match, IO, TextIO, BinaryIO
-    • Generic classes
-    • TypedDict classes
-    • NamedTuple classes
-    • TypeVars
+        `Type`, `ByteString`, `Pattern`, `Match`, `IO`, `TextIO`, `BinaryIO`
+    • `Generic` classes
+    • `TypedDict`s
+    • `NamedTuple`s and `NamedTuple` class itself
+    • `TypeVar`s
 """
 
 from inspect import signature
@@ -74,6 +76,9 @@ from wrapt import decorator
 # CONSIDER: change @check_args signature (once again) to @check_args(*excluded: str, check_defaults: bool = False)
 
 # CONSIDER: add support for applying @check_args() to properties in addition to classmethods and staticmethods
+
+
+__all__ = ['check_args']
 
 
 NoneType = type(None)
@@ -96,99 +101,6 @@ def _format_type_(typevar: Typespec) -> str:
         return typevar.__name__
     else:
         return str(typevar).replace('typing.', '')
-
-
-class TypecheckError(Exception):
-    """Runtime type checking failed"""
-
-    def __init__(self, template: str = None, *, value: Any, exptype: Typespec, varname: str):
-        self.value = value
-        self.typespec = exptype
-        if not template:
-            template = "{value!r:.100} is not {exptype}"
-        message = template.format(value=value, exptype=_format_type_(exptype), varname=varname)
-        super().__init__(f"argument '{varname}': " + message)
-
-
-def check_args(*arguments: str, check_defaults: bool = False):
-    """
-    Decorator for typechecking wrapped function / method arguments specified in `arguments`
-    If `arguments` are omitted, typeckecking is performed on all the parameters being passed
-    Checks are performed against argument annotations of wrapped callable at the time it is being called
-    Default values of function / method arguments are not typechecked unless `check_defaults=True` is provided
-    If wrapped function / method is already decorated, `@check_args` should be applied beforehand in most cases
-    Though classmethods and staticmehtods are treated properly and may be simply decorated over
-    If some argument of wrapped callable has default value set to `None`, its annotation is
-        automatically converted to `Optional[<annotation>]` (by `typing.get_type_hints()` used under the hood)
-    >>> @check_args
-    ... def func(a: Union[int, Dict[str, int], Tuple[Any, str]]): ...
-    ...
-    >>> func(1)  # typechecks: `1` is an `int`
-    >>> func(True)  # typechecks: `bool` is a subclass of `int`
-    >>> func({})  # typechecks: empty dict is a `dict`
-    >>> func({1: True, 2: 's'})  # typechecks: dict contents are not inspected
-    >>> func((object, 's'))  #typechecks: argument is a `tuple` and its structure matches annotation signature
-    >>> func(None)  # fails: `NoneType` does not match any one of given specifications
-    >>> func(['s', 1])  # fails: `list` is not an `int`, nor a `dict`, nor a `tuple`
-    >>> func(('s', 0))  # fails: the second item of the tuple does not match given `str` specification
-    >>> func((0, 's', 'extra'))  # fails: tuple has an extra element
-
-    >>> @check_args('a', 'b')
-    ... def func(a: Any, b: int, c: bool):
-    ...     ...
-    >>> func(object, 1, 's')  # typechecks: only 'a' and 'b' arguments are checked
-    """
-
-    def function_processor(wrapee):
-        nonlocal argnames
-
-        # Deny class decorators
-        if isinstance(wrapee, type):
-            raise TypeError("@check_args decorator cannot be applied to classes,"
-                            " __init__() method could be decorated instead")
-
-        # Fetch annotations from `function` reliably, even if it is classmethod or staticmethod
-        if isinstance(wrapee, (classmethod, staticmethod)):
-            type_hints = get_type_hints(wrapee.__func__)
-        else:
-            type_hints = get_type_hints(wrapee)
-
-        # Get annotations mapping for requested arguments
-        if not argnames:
-            annotations = type_hints
-            annotations.pop('return', None)
-        else:
-            annotations = {}
-            for name in argnames:
-                if name not in type_hints:
-                    raise ValueError(f"non-existent argument name '{name}'"
-                                     f" for function '{wrapee.__name__}'")
-                annotations[name] = type_hints[name]
-
-        @decorator
-        def wrapper(func, instance, args, kwargs):
-            sign = signature(func)
-            parameters = sign.bind(*args, **kwargs)
-            if check_defaults:
-                parameters.apply_defaults()
-            for argname, annotation in annotations.items():
-                try:
-                    value = parameters.arguments[argname]
-                except KeyError:
-                    continue  # skip if argument is not provided and defaults are not checked
-                _check_type_(value, annotation, argname=argname)
-            return func(*args, **kwargs)
-
-        return wrapper(wrapee)
-
-    if arguments == () or isinstance(arguments[0], str):
-        # Infer decorator is used with arguments, thus `arguments` is a tuple of argument names to be checked
-        argnames = arguments
-        return function_processor
-    else:
-        # Infer decorator is used without arguments, thus `arguments` contains a callable to be wrapped
-        argnames = ()
-        return function_processor(arguments[0])
 
 
 def _check_type_(value: Any, typespec: Typespec, *, argname: str):
@@ -400,6 +312,102 @@ def _check_type_(value: Any, typespec: Typespec, *, argname: str):
         if typespec._name == 'Pattern':
             value: Pattern
             return _check_type_(value.pattern, typeargs[0], argname=argname)
+
+
+class TypecheckError(Exception):
+    """Runtime type checking failed"""
+
+    def __init__(self, template: str = None, *, value: Any, exptype: Typespec, varname: str):
+        self.value = value
+        self.typespec = exptype
+        if not template:
+            template = "{value!r:.100} is not {exptype}"
+        message = template.format(value=value, exptype=_format_type_(exptype), varname=varname)
+        super().__init__(f"argument '{varname}': " + message)
+
+
+def check_args(*arguments: str, check_defaults: bool = False):
+    """
+    Decorator for typechecking wrapped function / method arguments specified in `arguments`
+    Raises `TypecheckError` if typecheck fails, otherwise returns `None`
+    Checks are performed against argument annotations of wrapped callable at the time it is being called
+    If `arguments` are omitted, typeckecking is performed on all the parameters being passed
+    Default values of function / method arguments are not typechecked unless `check_defaults=True` is provided
+    If wrapped function / method is already decorated, `@check_args` should be applied beforehand in most cases
+    Though `classmethod`s and `staticmehtod`s are treated properly and may be simply decorated over
+    If some argument of wrapped callable has default value set to `None`, its annotation is
+        automatically converted to `Optional[<annotation>]` (by `typing.get_type_hints()` used under the hood)
+    >>> @check_args
+    ... def func(a: Union[int, Dict[str, int], Tuple[Any, str]]):
+    ...     ...
+    ...
+    >>> func(1)  # typechecks: `1` is an `int`
+    >>> func(True)  # typechecks: `bool` is a subclass of `int`
+    >>> func({})  # typechecks: empty dict is a `dict`
+    >>> func({1: True, 2: 's'})  # typechecks: dict contents are not inspected
+    >>> func((object, 's'))  #typechecks: argument is a `tuple` and its structure matches annotation signature
+    >>> func(None)  # fails: `NoneType` does not match any one of given specifications
+    >>> func(['s', 1])  # fails: `list` is not an `int`, nor a `dict`, nor a `tuple`
+    >>> func(('s', 0))  # fails: the second item of the tuple does not match given `str` specification
+    >>> func((0, 's', 'extra'))  # fails: tuple has an extra element
+
+    >>> @check_args('a', 'b')
+    ... def func(a: Any, b: int, c: bool):
+    ...     ...
+    ...
+    >>> func(object, 1, 's')  # typechecks: only 'a' and 'b' arguments are checked
+    """
+
+    def function_processor(wrapee):
+        nonlocal argnames
+
+        # Deny class decorators
+        if isinstance(wrapee, type):
+            raise TypeError("@check_args decorator cannot be applied to classes,"
+                            " __init__() method could be decorated instead")
+
+        # Fetch annotations from `function` reliably, even if it is classmethod or staticmethod
+        if isinstance(wrapee, (classmethod, staticmethod)):
+            type_hints = get_type_hints(wrapee.__func__)
+        else:
+            type_hints = get_type_hints(wrapee)
+
+        # Get annotations mapping for requested arguments
+        if not argnames:
+            annotations = type_hints
+            annotations.pop('return', None)
+        else:
+            annotations = {}
+            for name in argnames:
+                if name not in type_hints:
+                    raise ValueError(f"non-existent argument name '{name}'"
+                                     f" for function '{wrapee.__name__}'")
+                annotations[name] = type_hints[name]
+
+        @decorator
+        def wrapper(func, instance, args, kwargs):
+            sign = signature(func)
+            parameters = sign.bind(*args, **kwargs)
+            if check_defaults:
+                parameters.apply_defaults()
+            for argname, annotation in annotations.items():
+                try:
+                    value = parameters.arguments[argname]
+                except KeyError:
+                    continue  # skip if argument is not provided and defaults are not checked
+                _check_type_(value, annotation, argname=argname)
+            return func(*args, **kwargs)
+
+        return wrapper(wrapee)
+
+    if arguments == () or isinstance(arguments[0], str):
+        # Infer decorator is used with arguments, thus `arguments` is a tuple of argument names to be checked
+        argnames = arguments
+        return function_processor
+    else:
+        # Infer decorator is used without arguments, thus `arguments` contains a callable to be wrapped
+        argnames = ()
+        return function_processor(arguments[0])
 
 
 if __name__ == '__main__':

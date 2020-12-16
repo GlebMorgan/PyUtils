@@ -1,3 +1,8 @@
+"""
+Utilities intended for manipulating binary data on a sub-byte level
+"""
+
+
 from __future__ import annotations
 from functools import reduce
 from itertools import groupby
@@ -10,7 +15,7 @@ __all__ = ['Bits']
 
 class Bits(int):
     """
-    Wrapper around `int` treating a number as a bit sequence
+    Wrapper around `int` that treats a number as a bit sequence
     Provides a set of tools to manipulate, extract, insert, split, combine
         individual bits and bit sequences within a processed number
     All methods intended to modify the value in-place return a newly created `Bits` object
