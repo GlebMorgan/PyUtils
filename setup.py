@@ -9,7 +9,7 @@ README = Path('./README.md')
 
 setup(
         name="utils",
-        version="1.1",
+        version="1.2",
         author="GlebMorgan",
         author_email="glebmorgan@gmail.com",
         description="Python utilities for cross-project use",
@@ -22,6 +22,13 @@ setup(
         install_requires=['wrapt'],
         extras_require={'test': ['pytest', 'pytest-lazy-fixture']},
 
-        # platforms
-        # classifiers
+        classifiers = [
+            'Environment :: Console',
+            'Intended Audience :: Developers',
+            'Operating System :: Microsoft :: Windows',
+            'Programming Language :: Python :: 3.8',
+            'Topic :: Software Development :: Libraries :: Python Modules',
+            'Topic :: Utilities',
+            'Typing :: Typed',
+        ]
 )
